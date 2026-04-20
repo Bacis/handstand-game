@@ -1,0 +1,12 @@
+{
+  "name": "handstand-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based handstand tracker with MediaPipe pose detection, Three.js aura overlay, and a self-hosted leaderboard.",
+  "scripts": {
+    "dev": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "npm run preview --prefix client",
+    "install:all": "npm install && npm install --prefix client"
+  }
+}
