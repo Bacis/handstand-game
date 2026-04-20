@@ -5,6 +5,7 @@ import Track from './pages/Track.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import Profile from './pages/Profile.jsx';
 import SkeletonLab from './pages/SkeletonLab.jsx';
+import BadgeLab from './pages/BadgeLab.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import { AuthProvider, useAuth } from './lib/auth.jsx';
 
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/skeleton-lab" element={<SkeletonLab />} />
+            <Route path="/badges" element={<BadgeLab />} />
           </Routes>
         </main>
       </div>

@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import { ACHIEVEMENTS } from '../../lib/achievements.js';
 import { getState } from '../../lib/achievementsStore.js';
 import { api } from '../../lib/api.js';
+import Badge from '../Badge.jsx';
 
 export default function AchievementShowcase({ userId }) {
   const { user } = useAuth();
@@ -51,13 +52,13 @@ export default function AchievementShowcase({ userId }) {
               className={`rounded-lg border p-3 transition ${
                 got
                   ? 'border-aura-gold/40 bg-aura-gold/5'
-                  : 'border-white/5 bg-ink-800/40 opacity-60'
+                  : 'border-white/5 bg-ink-800/40'
               }`}
               title={a.description}
             >
               <div className="flex items-center gap-2">
-                <div className="text-xl shrink-0">{a.icon || '🏆'}</div>
-                <div className="font-bold text-sm truncate">{a.name}</div>
+                <Badge achievement={a} size="md" locked={!got} />
+                <div className={`font-bold text-sm truncate ${got ? 'text-white' : 'text-gray-400'}`}>{a.name}</div>
               </div>
               <div className="mt-1 text-[10px] text-gray-500">
                 {got ? `Unlocked ${String(unlocked[a.key]).slice(0, 10)}` : a.description}

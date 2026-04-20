@@ -1,4 +1,5 @@
 import { findAchievement } from '../lib/achievements.js';
+import Badge from './Badge.jsx';
 
 // Right-edge stack inside the video frame. Lists badges unlocked during
 // the current session only — empty by default, pops in as they fire.
@@ -15,9 +16,9 @@ export default function SessionAchievements({ keys = [] }) {
         return (
           <div
             key={key}
-            className="flex items-center gap-2 bg-ink-800/80 border border-aura-gold/30 rounded-full pl-2 pr-3 py-1 motion-safe:animate-kinetic-slide backdrop-blur-sm"
+            className="flex items-center gap-2 bg-ink-800/80 border border-aura-gold/30 rounded-full pl-1 pr-3 py-1 motion-safe:animate-kinetic-slide backdrop-blur-sm"
           >
-            <span className="text-base leading-none">{a.icon || '🏆'}</span>
+            <Badge achievement={a} size="sm" />
             <span className="text-[10px] font-bold text-white truncate">{a.name}</span>
           </div>
         );

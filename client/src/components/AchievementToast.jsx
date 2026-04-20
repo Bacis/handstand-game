@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { findAchievement } from '../lib/achievements.js';
+import Badge from './Badge.jsx';
 
 function Toast({ toast, onDismiss }) {
   const [visible, setVisible] = useState((toast.deferMs || 0) === 0);
@@ -21,7 +22,7 @@ function Toast({ toast, onDismiss }) {
       role="status"
       onClick={() => onDismiss(toast.id)}
     >
-      <div className="text-2xl leading-none select-none">{meta.icon || '🏆'}</div>
+      <Badge achievement={meta} size="lg" />
       <div className="flex-1 min-w-0">
         <div className="text-[10px] uppercase tracking-widest text-aura-gold font-bold">
           Achievement unlocked

@@ -1,4 +1,5 @@
 import { MASTERIES } from '../lib/masteries.js';
+import Badge from './Badge.jsx';
 
 // 40-tier mastery showcase, rethemed to the brand palette.
 // Mobile: horizontal scroll-snap rail. md+: responsive grid.
@@ -69,14 +70,19 @@ function TierCell({ mastery, idx, unlockedMs, className = '', inGrid = false }) 
           style={current ? { boxShadow: '0 0 10px #ff4d2e' } : undefined}
         />
       </div>
-      <div
-        className={`mt-2 font-black text-lg md:text-xl leading-tight tracking-tight ${
-          current ? 'text-brand-accent' : unlocked ? 'text-white' : 'text-white/70'
-        }`}
-      >
-        {mastery.name}
+      <div className="mt-3 flex items-center gap-3">
+        <Badge achievement={mastery} size="md" locked={!unlocked} />
+        <div className="min-w-0 flex-1">
+          <div
+            className={`font-black text-base md:text-lg leading-tight tracking-tight truncate ${
+              current ? 'text-brand-accent' : unlocked ? 'text-white' : 'text-white/70'
+            }`}
+          >
+            {mastery.name}
+          </div>
+          <div className="text-[11px] text-white/55 leading-snug truncate">{mastery.tagline}</div>
+        </div>
       </div>
-      <div className="text-xs text-white/55 mt-1 leading-snug">{mastery.tagline}</div>
       {current && (
         <div className="absolute inset-x-0 bottom-0 h-[2px] bg-brand-accent" style={{ boxShadow: '0 0 10px #ff4d2e' }} />
       )}

@@ -20,6 +20,8 @@ export const ACHIEVEMENTS = [
     name: 'First Liftoff',
     description: 'Hold a handstand for 3 seconds.',
     icon: '🛫',
+    glyph: 'GiRocket',
+    tier: 'bronze',
     check: (c) => c.durationMs >= 3_000,
   },
   {
@@ -27,6 +29,8 @@ export const ACHIEVEMENTS = [
     name: '5-Second Club',
     description: 'Cross the 5-second line.',
     icon: '🖐',
+    glyph: 'GiHighFive',
+    tier: 'bronze',
     check: (c) => c.durationMs >= 5_000,
   },
   {
@@ -34,6 +38,8 @@ export const ACHIEVEMENTS = [
     name: '15-Second Club',
     description: 'Hold past 15 seconds.',
     icon: '🌀',
+    glyph: 'GiSpiralBloom',
+    tier: 'silver',
     check: (c) => c.durationMs >= 15_000,
   },
   {
@@ -41,6 +47,8 @@ export const ACHIEVEMENTS = [
     name: 'Half-Minute Hero',
     description: 'Hold a handstand for 30 seconds.',
     icon: '🏅',
+    glyph: 'GiMedal',
+    tier: 'gold',
     check: (c) => c.durationMs >= 30_000,
   },
   {
@@ -48,6 +56,8 @@ export const ACHIEVEMENTS = [
     name: 'Minute Maker',
     description: 'A full minute upside down.',
     icon: '👑',
+    glyph: 'GiCrown',
+    tier: 'gold',
     check: (c) => c.durationMs >= 60_000,
   },
   {
@@ -55,6 +65,8 @@ export const ACHIEVEMENTS = [
     name: 'Two-Min Titan',
     description: 'Two minutes. Elite territory.',
     icon: '🗿',
+    glyph: 'GiMoai',
+    tier: 'mythic',
     check: (c) => c.durationMs >= 120_000,
   },
   {
@@ -62,6 +74,8 @@ export const ACHIEVEMENTS = [
     name: 'Nice.',
     description: 'Hold for exactly 69-ish seconds.',
     icon: '😎',
+    glyph: 'GiSunglasses',
+    tier: 'gold',
     check: (c) => c.durationMs >= 69_000 && c.durationMs < 70_000,
   },
   {
@@ -69,6 +83,8 @@ export const ACHIEVEMENTS = [
     name: 'Persistent',
     description: 'Complete 10 attempts total.',
     icon: '🔁',
+    glyph: 'GiCycle',
+    tier: 'bronze',
     check: (c) => c.counters.total_attempts >= 10,
   },
   {
@@ -76,6 +92,8 @@ export const ACHIEVEMENTS = [
     name: 'Marathoner',
     description: 'Log 30 cumulative minutes held.',
     icon: '🏃',
+    glyph: 'GiSprint',
+    tier: 'gold',
     check: (c) => c.counters.total_hold_ms >= 30 * 60 * 1000,
   },
   {
@@ -83,6 +101,8 @@ export const ACHIEVEMENTS = [
     name: 'Three in a Row',
     description: 'Train on 3 different days.',
     icon: '📅',
+    glyph: 'GiCalendar',
+    tier: 'silver',
     check: (c) => c.counters.day_keys.length >= 3,
   },
   {
@@ -90,6 +110,8 @@ export const ACHIEVEMENTS = [
     name: 'Comeback Kid',
     description: 'Beat your PB after 3+ shorter attempts.',
     icon: '💪',
+    glyph: 'GiMuscleUp',
+    tier: 'silver',
     check: (c) => c.isNewPb && c.counters.shorts_since_last_pb >= 3,
   },
   {
@@ -97,6 +119,8 @@ export const ACHIEVEMENTS = [
     name: 'Early Bird',
     description: 'Record an attempt before 7am.',
     icon: '🌅',
+    glyph: 'GiSunrise',
+    tier: 'silver',
     check: (c) => c.now.getHours() < 7,
   },
   {
@@ -104,6 +128,8 @@ export const ACHIEVEMENTS = [
     name: 'Night Owl',
     description: 'Record an attempt after 11pm.',
     icon: '🌙',
+    glyph: 'GiOwl',
+    tier: 'silver',
     check: (c) => c.now.getHours() >= 23,
   },
   {
@@ -111,6 +137,8 @@ export const ACHIEVEMENTS = [
     name: 'Evangelist',
     description: 'Open the share panel.',
     icon: '📣',
+    glyph: 'GiMegaphone',
+    tier: 'bronze',
     // Unlocked via recordEvent('shared'), not on attempt complete.
     check: (c) => c.counters.shared_count >= 1,
     event: 'shared',
