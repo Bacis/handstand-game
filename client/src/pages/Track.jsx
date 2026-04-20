@@ -28,6 +28,13 @@ const STATUS_TEXT = {
 
 const SAMPLE_CLIP_URL = '/test-clips/handstand.mp4';
 
+// Dev tools (video-file + sample-clip sources, debug HUD) are only exposed
+// when the page is served from localhost. In production the page is webcam-
+// only — no file picker, no sample clip, no debug overlay.
+const IS_DEV_HOST =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
 export default function Track() {
   const { user } = useAuth();
   const videoRef = useRef(null);
@@ -349,6 +356,7 @@ export default function Track() {
         onToggleLoop={setLoopFile}
         fileUrlIsBlob={fileUrl?.startsWith('blob:')}
         fileUrlIsSample={fileUrl === SAMPLE_CLIP_URL}
+        showDevTools={IS_DEV_HOST}
         recording={recorder.recording}
         statusText={completeLabel}
         complete={complete}
@@ -356,7 +364,7 @@ export default function Track() {
         mirror={source === 'webcam'}
       />
 
-      {debug && (
+      {debug && IS_DEV_HOST && (
         <DebugHUD
           classification={latest.classification}
           debouncerActive={state === STATE.TRACKING}

@@ -78,6 +78,7 @@ const TrackingView = forwardRef(function TrackingView(
     onToggleLoop,
     fileUrlIsBlob,
     fileUrlIsSample,
+    showDevTools = false,
     recording,
     statusText,
     complete,
@@ -258,36 +259,39 @@ const TrackingView = forwardRef(function TrackingView(
         </div>
       </div>
 
-      {/* Top toolbar — source picker + debug/loop toggles */}
-      <div className="ts-toolbar">
-        <button
-          type="button"
-          className={`chip ${source === 'webcam' ? 'on' : ''}`}
-          onClick={() => onSwitchSource('webcam')}
-        >
-          Webcam
-        </button>
-        <label className={`chip ${source === 'file' && fileUrlIsBlob ? 'on' : ''}`}>
-          Video file
-          <input type="file" accept="video/*" className="hidden" style={{ display: 'none' }} onChange={onPickFile} />
-        </label>
-        <button
-          type="button"
-          className={`chip ${source === 'file' && fileUrlIsSample ? 'on' : ''}`}
-          onClick={onLoadSample}
-        >
-          Sample clip
-        </button>
-        <span className="sep" />
-        {source === 'file' && (
-          <label className="toggle" title="Loop the sample clip">
-            <input type="checkbox" checked={loopFile} onChange={(e) => onToggleLoop(e.target.checked)} /> Loop
+      {/* Dev-only top toolbar — source picker (file/sample) + debug toggles.
+          Hidden in production so players only ever see the webcam flow. */}
+      {showDevTools && (
+        <div className="ts-toolbar">
+          <button
+            type="button"
+            className={`chip ${source === 'webcam' ? 'on' : ''}`}
+            onClick={() => onSwitchSource('webcam')}
+          >
+            Webcam
+          </button>
+          <label className={`chip ${source === 'file' && fileUrlIsBlob ? 'on' : ''}`}>
+            Video file
+            <input type="file" accept="video/*" className="hidden" style={{ display: 'none' }} onChange={onPickFile} />
           </label>
-        )}
-        <label className="toggle">
-          <input type="checkbox" checked={debug} onChange={(e) => onToggleDebug(e.target.checked)} /> Debug
-        </label>
-      </div>
+          <button
+            type="button"
+            className={`chip ${source === 'file' && fileUrlIsSample ? 'on' : ''}`}
+            onClick={onLoadSample}
+          >
+            Sample clip
+          </button>
+          <span className="sep" />
+          {source === 'file' && (
+            <label className="toggle" title="Loop the sample clip">
+              <input type="checkbox" checked={loopFile} onChange={(e) => onToggleLoop(e.target.checked)} /> Loop
+            </label>
+          )}
+          <label className="toggle">
+            <input type="checkbox" checked={debug} onChange={(e) => onToggleDebug(e.target.checked)} /> Debug
+          </label>
+        </div>
+      )}
 
       {complete && actions && (
         <div className="ts-action-rail">
