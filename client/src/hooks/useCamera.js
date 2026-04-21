@@ -37,25 +37,59 @@ export function useCamera(videoRef, { enabled = true, width = DEFAULT_WIDTH, hei
 
     async function start() {
       try {
-        // `facingMode: { exact }` forces the browser to actually switch
-        // cameras when the user flips. With a bare string or `{ ideal }`,
-        // mobile Chrome / iOS Safari often just hand back the existing
-        // stream (same camera) since it already satisfies the preference.
-        // Fall back to `{ ideal }` if the device doesn't expose the exact
-        // camera the user asked for — better to get *some* stream than
-        // fail outright.
+        const videoConstraints = { width: { ideal: width }, height: { ideal: height } };
+
+        // Attempt 1 — `facingMode: { exact }`. Forces browsers that honor
+        // facingMode (Chrome Android, modern Safari) to actually switch
+        // cameras instead of silently returning the existing stream.
+        //
+        // Attempt 2 — deviceId-based switch. iOS Safari notoriously fails
+        // the exact-facingMode match. We enumerate video inputs, find one
+        // whose label or index *isn't* the currently-active device, and
+        // request it by deviceId. deviceId switches are rock-solid when
+        // the page already has camera permission.
+        //
+        // Attempt 3 — `facingMode: { ideal }` as a best-effort last resort.
         let stream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: width }, height: { ideal: height }, facingMode: { exact: facingMode } },
+            video: { ...videoConstraints, facingMode: { exact: facingMode } },
             audio: false,
           });
         } catch (exactErr) {
           if (exactErr?.name !== 'OverconstrainedError' && exactErr?.name !== 'NotFoundError') throw exactErr;
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: width }, height: { ideal: height }, facingMode: { ideal: facingMode } },
-            audio: false,
-          });
+
+          let matchedById = false;
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const cams = devices.filter((d) => d.kind === 'videoinput');
+            // Labels are only populated once the page has active camera
+            // permission, so this only works after the first grant — fine
+            // for our use case (user flips after the rear camera is live).
+            const wantUser = facingMode === 'user';
+            const pick = cams.find((d) => {
+              const label = (d.label || '').toLowerCase();
+              return wantUser
+                ? /front|user|selfie|facetime/.test(label)
+                : /back|rear|environment/.test(label);
+            }) || (cams.length >= 2 ? cams[wantUser ? 0 : cams.length - 1] : null);
+            if (pick?.deviceId) {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: { ...videoConstraints, deviceId: { exact: pick.deviceId } },
+                audio: false,
+              });
+              matchedById = true;
+            }
+          } catch {
+            // fall through to ideal
+          }
+
+          if (!matchedById) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { ...videoConstraints, facingMode: { ideal: facingMode } },
+              audio: false,
+            });
+          }
         }
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
