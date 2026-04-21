@@ -112,6 +112,50 @@
   opacity: 0.75;
 }
 
+/* Camera flip button — hidden on desktop (usually only one camera), shown
+   on touch devices where the user can swap between 'user' (selfie) and
+   'environment' (rear) to monitor themselves vs record the space. */
+.ts-flip-cam {
+  display: none;
+  position: absolute;
+  top: calc(48px + env(safe-area-inset-top));
+  right: calc(44px + env(safe-area-inset-right));
+  z-index: 60;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ts-flip-cam:hover,
+.ts-flip-cam:focus-visible {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.75);
+  outline: none;
+}
+.ts-flip-cam:active { filter: brightness(0.88); }
+.ts-flip-cam .glyph {
+  font-size: 16px;
+  line-height: 1;
+  display: inline-block;
+  transform: scaleX(-1);
+}
+@media (pointer: coarse) {
+  .ts-flip-cam { display: inline-flex; }
+}
+
 .ts-timer {
   position: absolute;
   top: 56px;

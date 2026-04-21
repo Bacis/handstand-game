@@ -86,6 +86,8 @@ const TrackingView = forwardRef(function TrackingView(
     completeLabel,
     actions,
     mirror = false,
+    facingMode = 'environment',
+    onFlipCamera = null,
     onEndAttempt = null,
   },
   ref,
@@ -180,6 +182,19 @@ const TrackingView = forwardRef(function TrackingView(
           {recording ? 'REC · 30fps' : 'STANDBY'}
         </div>
         <div className="ts-cam">CAM · {videoSize || '—'}</div>
+
+        {onFlipCamera && (
+          <button
+            type="button"
+            className="ts-flip-cam"
+            onClick={onFlipCamera}
+            aria-label={facingMode === 'user' ? 'Switch to rear camera' : 'Switch to selfie camera'}
+            title={facingMode === 'user' ? 'Switch to rear camera' : 'Switch to selfie camera'}
+          >
+            <span className="glyph" aria-hidden>⟲</span>
+            <span className="lbl">{facingMode === 'user' ? 'Selfie' : 'Rear'}</span>
+          </button>
+        )}
 
         <div className={`ts-timer ${heat}`}>
           {parts.mm}:<span>{parts.ss}</span>

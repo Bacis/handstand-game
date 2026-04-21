@@ -47,7 +47,14 @@ export default function Track() {
   const [videoAspect, setVideoAspect] = useState(16 / 9);
   const [videoSize, setVideoSize] = useState(null);
 
-  const camera = useCamera(videoRef, { enabled: source === 'webcam' });
+  // Default to the rear camera so the phone can sit on the floor / against
+  // a wall filming the person. Users tapping the in-frame flip button switch
+  // to the selfie ('user') camera when they want to monitor themselves.
+  const [facingMode, setFacingMode] = useState('environment');
+  const camera = useCamera(videoRef, { enabled: source === 'webcam', facingMode });
+  const flipCamera = useCallback(() => {
+    setFacingMode((m) => (m === 'user' ? 'environment' : 'user'));
+  }, []);
   const file = useVideoFile(videoRef, fileUrl, { enabled: source === 'file', loop: loopFile });
   const ready = source === 'webcam' ? camera.ready : file.ready;
   const srcError = source === 'webcam' ? camera.error : file.error;
@@ -382,7 +389,9 @@ export default function Track() {
         statusText={completeLabel}
         complete={complete}
         actions={actions}
-        mirror={source === 'webcam'}
+        mirror={source === 'webcam' && facingMode === 'user'}
+        facingMode={facingMode}
+        onFlipCamera={source === 'webcam' ? flipCamera : null}
         onEndAttempt={state === STATE.TRACKING ? forceComplete : null}
       />
 
@@ -403,7 +412,7 @@ export default function Track() {
         isPersonalBest={isNewPb}
         landmarkTimeline={sessionBest.landmarkTimeline}
         earnedKeys={achievements.sessionKeys}
-        mirror={source === 'webcam'}
+        mirror={source === 'webcam' && facingMode === 'user'}
         onShared={achievements.recordEvent}
       />
 
