@@ -12,8 +12,21 @@ function sinceIso(period) {
   return null;
 }
 
+// Challenges are duration-based (handstand) or rep-based. Ordering columns
+// follow from that — keep this map in sync with the challenge strategies.
+const SCORE_COLUMN_BY_CHALLENGE = {
+  handstand: 'best_time_ms',
+  pullups: 'best_reps',
+  pushups: 'best_reps',
+  squats: 'best_reps',
+};
+
+function leaderboardSortColumn(challengeType) {
+  return SCORE_COLUMN_BY_CHALLENGE[challengeType] ?? 'best_time_ms';
+}
+
 export const api = {
-  submitAttempt: async ({ durationMs, videoBlob, deviceInfo }) => {
+  submitAttempt: async ({ challengeType = 'handstand', durationMs, repCount, videoBlob, deviceInfo }) => {
     const user = await requireUser();
 
     let videoPath = null;
@@ -30,7 +43,9 @@ export const api = {
       .from('attempts')
       .insert({
         user_id: user.id,
-        duration_ms: Math.floor(durationMs),
+        challenge_type: challengeType,
+        duration_ms: durationMs != null ? Math.floor(durationMs) : null,
+        rep_count: repCount != null ? Math.floor(repCount) : null,
         video_path: videoPath,
         device_info: deviceInfo ?? null,
       })
@@ -40,25 +55,28 @@ export const api = {
     return { attempt: data };
   },
 
-  myAttempts: async () => {
+  myAttempts: async (challengeType) => {
     const user = await requireUser();
-    const { data, error } = await supabase
+    let q = supabase
       .from('attempts')
       .select('*')
       .eq('user_id', user.id)
       .order('recorded_at', { ascending: false })
       .limit(100);
+    if (challengeType) q = q.eq('challenge_type', challengeType);
+    const { data, error } = await q;
     if (error) throw new Error(error.message);
     return { attempts: data };
   },
 
-  // Public rows — no auth calls, so this can never hang on a flaky session.
-  leaderboardRows: async (period = 'all') => {
+  leaderboardRows: async (period = 'all', challengeType = 'handstand') => {
     const since = sinceIso(period);
+    const sortCol = leaderboardSortColumn(challengeType);
     let q = supabase
-      .from('leaderboard')
+      .from('leaderboard_v2')
       .select('*')
-      .order('best_time_ms', { ascending: false })
+      .eq('challenge_type', challengeType)
+      .order(sortCol, { ascending: false, nullsFirst: false })
       .limit(50);
     if (since) q = q.gte('last_attempt_at', since);
     const { data, error } = await q;
@@ -66,48 +84,55 @@ export const api = {
     return data ?? [];
   },
 
-  // Personal standing — optional decoration. Called only when we already have
-  // a user id from React state, so no auth round-trip is needed.
-  leaderboardStanding: async (userId, period = 'all') => {
+  leaderboardStanding: async (userId, period = 'all', challengeType = 'handstand') => {
     if (!userId) return null;
     const since = sinceIso(period);
-    let meQ = supabase.from('leaderboard').select('best_time_ms').eq('user_id', userId);
+    const sortCol = leaderboardSortColumn(challengeType);
+    let meQ = supabase
+      .from('leaderboard_v2')
+      .select(`${sortCol}, best_time_ms, best_reps`)
+      .eq('user_id', userId)
+      .eq('challenge_type', challengeType);
     if (since) meQ = meQ.gte('last_attempt_at', since);
     const { data: me } = await meQ.maybeSingle();
-    if (me?.best_time_ms == null) return null;
+    if (me?.[sortCol] == null) return null;
 
-    let totalQ = supabase.from('leaderboard').select('user_id', { count: 'exact', head: true });
+    let totalQ = supabase
+      .from('leaderboard_v2')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('challenge_type', challengeType);
     if (since) totalQ = totalQ.gte('last_attempt_at', since);
     const { count: total } = await totalQ;
 
     let betterQ = supabase
-      .from('leaderboard')
+      .from('leaderboard_v2')
       .select('user_id', { count: 'exact', head: true })
-      .gt('best_time_ms', me.best_time_ms);
+      .eq('challenge_type', challengeType)
+      .gt(sortCol, me[sortCol]);
     if (since) betterQ = betterQ.gte('last_attempt_at', since);
     const { count: better } = await betterQ;
 
     return {
       rank: (better ?? 0) + 1,
       total_participants: total ?? 0,
-      best_time_ms: me.best_time_ms,
+      best_time_ms: me.best_time_ms ?? null,
+      best_reps: me.best_reps ?? null,
+      score_column: sortCol,
     };
   },
 
-  // Back-compat wrapper — some callers (e.g. LeaderboardPeek on home) still
-  // use the combined shape. Rows first; standing is best-effort.
-  leaderboard: async (period = 'all') => {
-    const leaderboard = await api.leaderboardRows(period);
+  leaderboard: async (period = 'all', challengeType = 'handstand') => {
+    const leaderboard = await api.leaderboardRows(period, challengeType);
     let personal = null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        personal = await api.leaderboardStanding(session.user.id, period);
+        personal = await api.leaderboardStanding(session.user.id, period, challengeType);
       }
     } catch {
       // swallow — standing is optional
     }
-    return { period, leaderboard, personal };
+    return { period, challengeType, leaderboard, personal };
   },
 
   user: async (id) => {
@@ -121,36 +146,51 @@ export const api = {
 
     const { data: attempts, error: aErr } = await supabase
       .from('attempts')
-      .select('id, duration_ms, video_path, recorded_at')
+      .select('id, challenge_type, duration_ms, rep_count, video_path, recorded_at')
       .eq('user_id', id)
-      .order('duration_ms', { ascending: false })
-      .limit(20);
+      .order('recorded_at', { ascending: false })
+      .limit(100);
     if (aErr) throw new Error(aErr.message);
+
+    // Per-challenge best score, pulled in one pass so the profile page can
+    // render a per-challenge summary without firing a request per tab.
+    const bestByChallenge = {};
+    for (const a of attempts ?? []) {
+      const score = a.rep_count ?? a.duration_ms ?? 0;
+      const cur = bestByChallenge[a.challenge_type];
+      if (!cur || score > cur) bestByChallenge[a.challenge_type] = score;
+    }
 
     return {
       user: profile,
       attempts: attempts ?? [],
-      best_time_ms: attempts?.[0]?.duration_ms ?? 0,
+      bestByChallenge,
+      best_time_ms: bestByChallenge.handstand ?? 0,
     };
   },
 
-  stats: async () => {
+  stats: async (challengeType = 'handstand') => {
     const { count: totalAttempts } = await supabase
       .from('attempts')
-      .select('id', { count: 'exact', head: true });
+      .select('id', { count: 'exact', head: true })
+      .eq('challenge_type', challengeType);
     const { count: totalUsers } = await supabase
       .from('profiles')
       .select('id', { count: 'exact', head: true });
-    const { data: longest } = await supabase
+    const topCol = leaderboardSortColumn(challengeType);
+    const topSelect = topCol === 'best_reps' ? 'rep_count' : 'duration_ms';
+    const { data: top } = await supabase
       .from('attempts')
-      .select('duration_ms')
-      .order('duration_ms', { ascending: false })
+      .select(topSelect)
+      .eq('challenge_type', challengeType)
+      .order(topSelect, { ascending: false, nullsFirst: false })
       .limit(1)
       .maybeSingle();
     return {
       total_attempts: totalAttempts ?? 0,
       total_users: totalUsers ?? 0,
-      longest_hold_ms: longest?.duration_ms ?? 0,
+      longest_hold_ms: challengeType === 'handstand' ? (top?.duration_ms ?? 0) : 0,
+      top_score: top?.[topSelect] ?? 0,
       total_duration_ms: 0,
     };
   },
@@ -161,8 +201,6 @@ export const api = {
     return data?.publicUrl ?? null;
   },
 
-  // Achievements live in client state for now; the Supabase-backed version is
-  // out of scope for this pass. Callers see an empty unlock list for others.
   userAchievements: async () => ({ unlocked: [] }),
   achievements: async () => ({ achievements: [] }),
 };

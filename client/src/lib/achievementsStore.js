@@ -3,7 +3,20 @@
 
 import { ACHIEVEMENTS } from './achievements.js';
 
-const KEY = 'handstand:achievements:v1';
+// Achievement state stays single-track for now — the unlock logic is tuned
+// around handstand durations, so other challenges don't contribute to it.
+// Legacy key migrated to the new namespace on first read.
+const KEY = 'playstando:handstand:achievements:v1';
+const LEGACY_KEY = 'handstand:achievements:v1';
+let migrated = false;
+function migrateLegacyOnce() {
+  if (migrated) return;
+  migrated = true;
+  try {
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy && !localStorage.getItem(KEY)) localStorage.setItem(KEY, legacy);
+  } catch {}
+}
 
 const EMPTY = () => ({
   unlocked: {},       // { [key]: iso string }
@@ -17,6 +30,7 @@ const EMPTY = () => ({
 });
 
 function read() {
+  migrateLegacyOnce();
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return EMPTY();

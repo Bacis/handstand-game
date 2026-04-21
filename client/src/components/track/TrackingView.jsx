@@ -1,26 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import PoseSkeleton from './PoseSkeleton.jsx';
-import { MASTERIES, TICK_SEC } from '../../lib/masteries.js';
 import './TrackingView.css';
 
-const FANFARE_MASTERIES = [
-  { atMs: 3000,   name: 'TOES UP!',    short: 'Toes Up' },
-  { atMs: 15000,  name: 'PLANK TIME!', short: 'Plank Time' },
-  { atMs: 30000,  name: 'STILL LIFE!', short: 'Still Life' },
-  { atMs: 60000,  name: 'PLUMB LINE!', short: 'Plumb Line' },
-  { atMs: 120000, name: 'MONK MODE!',  short: 'Vertical Monk' },
-];
-const TOTAL_RANKS = 40;
-
-function heatClass(ms) {
-  if (ms < 3000) return '';
-  if (ms < 15000) return 'warm';
-  if (ms < 30000) return 'hot';
-  return 'red';
-}
-
-// Minute:second.centisecond formatter. Centis as <span class="ms"> so the design's
-// smaller/dimmed millisecond styling applies.
 function fmtParts(ms) {
   const total = Math.max(0, ms | 0);
   const s = Math.floor(total / 1000);
@@ -32,34 +13,41 @@ function fmtParts(ms) {
   };
 }
 
-function currentTier(ms) {
-  if (ms < MASTERIES[0].atSec * 1000) return { rank: 0, short: 'Pre-flight' };
-  let hit = MASTERIES[0];
-  for (const m of MASTERIES) {
-    if (ms >= m.atSec * 1000) hit = m;
-    else break;
-  }
-  const rank = MASTERIES.findIndex((m) => m === hit) + 1;
-  return { rank, short: hit.name.replace('!', '') };
+// Progress through challenge tiers drives the timer's color ramp. The existing
+// .warm/.hot/.red CSS classes were tuned for handstand seconds, so we map a
+// 0→1 progress signal into those same buckets regardless of exercise.
+function heatClassFromProgress(progress) {
+  if (progress <= 0) return '';
+  if (progress < 0.15) return '';
+  if (progress < 0.35) return 'warm';
+  if (progress < 0.6) return 'hot';
+  return 'red';
 }
 
-function nextMastery(ms) {
-  const idx = MASTERIES.findIndex((m) => m.atSec * 1000 > ms);
-  if (idx === -1) return null;
-  return { ...MASTERIES[idx], atMs: MASTERIES[idx].atSec * 1000 };
+function currentTierIndex(tiers, score) {
+  let idx = -1;
+  for (let i = 0; i < tiers.length; i++) {
+    if (score >= tiers[i].at) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+function nextTier(tiers, score) {
+  return tiers.find((t) => t.at > score) ?? null;
 }
 
 /**
- * Full-bleed webcam tracking surface.
- *  - <video> (passed in via videoRef from the parent) fills the stage (cover)
- *  - PoseSkeleton SVG overlays at video-cover crop for landmark alignment
- *  - Reference lines (sky / floor), corner brackets, REC / CAM badges
- *  - Center timer with heat-stage colors (green → warm → hot → red)
- *  - RANK pill, 40 rank pips, telemetry, next-goal bar, status pill
- *  - fireBanner(idx) flashes the outlined "TOES UP!"-style fanfare
+ * Full-bleed webcam tracking surface. Accepts a challenge strategy so the HUD
+ * swaps between the handstand timer (mm:ss with heat ramp) and the rep counter
+ * used by pull-ups / push-ups / squats without any exercise-specific branches
+ * leaking into parent pages.
  */
 const TrackingView = forwardRef(function TrackingView(
   {
+    challenge,
+    score,
+    reps,
     videoRef,
     landmarks,
     videoAspect = 16 / 9,
@@ -83,7 +71,6 @@ const TrackingView = forwardRef(function TrackingView(
     recording,
     statusText,
     complete,
-    completeLabel,
     actions,
     mirror = false,
     facingMode = 'environment',
@@ -98,11 +85,8 @@ const TrackingView = forwardRef(function TrackingView(
   const flashEl = useRef(null);
 
   useImperativeHandle(ref, () => ({
-    fireBanner(idx) {
-      const m = FANFARE_MASTERIES[idx];
-      if (!m) return;
-      setBannerText(m.name);
-      // Force re-trigger animation by toggling .show off/on.
+    showCustomBanner(text) {
+      setBannerText(text);
       if (bannerEl.current) {
         bannerEl.current.classList.remove('show');
         void bannerEl.current.offsetWidth;
@@ -118,43 +102,51 @@ const TrackingView = forwardRef(function TrackingView(
         bannerEl.current?.classList.remove('show');
       }, 2400);
     },
-    showCustomBanner(text) {
-      setBannerText(text);
-      if (bannerEl.current) {
-        bannerEl.current.classList.remove('show');
-        void bannerEl.current.offsetWidth;
-        bannerEl.current.classList.add('show');
-      }
-      clearTimeout(bannerTimer.current);
-      bannerTimer.current = setTimeout(() => {
-        bannerEl.current?.classList.remove('show');
-      }, 2400);
-    },
   }));
 
   useEffect(() => () => clearTimeout(bannerTimer.current), []);
 
-  const parts = fmtParts(elapsedMs);
-  const heat = heatClass(elapsedMs);
-  const tier = currentTier(elapsedMs);
-  const nxt = nextMastery(elapsedMs);
-  const prev = tier.rank > 0 ? MASTERIES[tier.rank - 1].atSec * 1000 : 0;
-  const pct = nxt ? Math.min(100, Math.max(0, ((elapsedMs - prev) / (nxt.atMs - prev)) * 100)) : 100;
-  const curRank = tier.rank;
+  const tiers = challenge?.tiers ?? [];
+  const scoreType = challenge?.scoreType ?? 'duration';
+  const totalRanks = tiers.length || 40;
+  const tierIdx = currentTierIndex(tiers, score || 0);
+  const curTier = tierIdx >= 0 ? tiers[tierIdx] : null;
+  const nxt = nextTier(tiers, score || 0);
+  const topTierAt = tiers.length ? tiers[tiers.length - 1].at : 1;
+  const progress = topTierAt > 0 ? Math.min(1, (score || 0) / topTierAt) : 0;
+  const heat = heatClassFromProgress(progress);
+  const curRank = tierIdx + 1;
+  const tierLabel = curTier ? curTier.name.replace('!', '') : 'Pre-flight';
 
-  // Build layered outline text (wire-banner back/front) once per change.
+  // Progress bar fill between current and next tier.
+  const prevAt = tierIdx >= 0 ? tiers[tierIdx].at : 0;
+  const pct = nxt
+    ? Math.min(100, Math.max(0, (((score || 0) - prevAt) / (nxt.at - prevAt)) * 100))
+    : 100;
+
+  // Primary HUD display + secondary "hold" telemetry row vary by score type.
+  const parts = fmtParts(elapsedMs || 0);
+  const primary = useMemo(() => {
+    if (scoreType === 'reps') {
+      return { top: String(reps ?? 0), sub: (challenge?.unitLabel || 'reps').toUpperCase() };
+    }
+    return { top: `${parts.mm}:${parts.ss}`, sub: `.${parts.cc}` };
+  }, [scoreType, reps, parts.mm, parts.ss, parts.cc, challenge?.unitLabel]);
+
   const bannerLayers = useMemo(() => {
     const layers = [];
     for (let i = 6; i >= 1; i--) {
       const opacity = (0.5 - i * 0.06).toFixed(2);
-      layers.push({
-        tx: -i * 2.5,
-        ty: i * 2.5,
-        opacity,
-      });
+      layers.push({ tx: -i * 2.5, ty: i * 2.5, opacity });
     }
     return layers;
   }, []);
+
+  const remainingLabel = nxt
+    ? scoreType === 'reps'
+      ? `${Math.max(0, nxt.at - (score || 0))} reps`
+      : `${Math.max(0, (nxt.at - (score || 0)) / 1000).toFixed(1)}s`
+    : '';
 
   return (
     <div className="ts-root">
@@ -197,15 +189,15 @@ const TrackingView = forwardRef(function TrackingView(
         )}
 
         <div className={`ts-timer ${heat}`}>
-          {parts.mm}:<span>{parts.ss}</span>
-          <span className="ms">.{parts.cc}</span>
+          {primary.top}
+          <span className="ms">{scoreType === 'reps' ? ` ${primary.sub}` : primary.sub}</span>
         </div>
         <div className="ts-rank">
-          RANK {String(Math.max(curRank, 1)).padStart(2, '0')} · {(tier.short || 'PRE-FLIGHT').toUpperCase()}
+          RANK {String(Math.max(curRank, 1)).padStart(2, '0')} · {tierLabel.toUpperCase()}
         </div>
 
         <div className="ts-ranks">
-          {Array.from({ length: TOTAL_RANKS }, (_, i) => {
+          {Array.from({ length: totalRanks }, (_, i) => {
             const cls = i < curRank - 1 ? 'on' : i === curRank - 1 ? 'cur' : '';
             return <div key={i} className={`pip ${cls}`} />;
           })}
@@ -225,9 +217,11 @@ const TrackingView = forwardRef(function TrackingView(
             <span className="v">{recording ? '✓' : '—'}</span>
           </div>
           <div className="row">
-            <span className="k">hold</span>
+            <span className="k">{scoreType === 'reps' ? 'reps' : 'hold'}</span>
             <span className="v">
-              {parts.mm}:{parts.ss}.{parts.cc}
+              {scoreType === 'reps'
+                ? String(reps ?? 0)
+                : `${parts.mm}:${parts.ss}.${parts.cc}`}
             </span>
           </div>
         </div>
@@ -239,7 +233,7 @@ const TrackingView = forwardRef(function TrackingView(
                 Next · <b>{nxt.name.replace('!', '')}</b>
               </div>
               <div className="r">
-                <span>{Math.max(0, (nxt.atMs - elapsedMs) / 1000).toFixed(1)}s</span> to go
+                <span>{remainingLabel}</span> to go
               </div>
             </div>
             <div className="ts-next-track">
@@ -253,8 +247,7 @@ const TrackingView = forwardRef(function TrackingView(
           {statusText}
           {nxt && active && (
             <span className="next">
-              next: {nxt.name.replace('!', '').toLowerCase()} in{' '}
-              {Math.max(0, (nxt.atMs - elapsedMs) / 1000).toFixed(1)}s
+              next: {nxt.name.replace('!', '').toLowerCase()} in {remainingLabel}
             </span>
           )}
         </div>
@@ -276,8 +269,6 @@ const TrackingView = forwardRef(function TrackingView(
         </div>
       </div>
 
-      {/* Dev-only top toolbar — source picker (file/sample) + debug toggles.
-          Hidden in production so players only ever see the webcam flow. */}
       {showDevTools && (
         <div className="ts-toolbar">
           <button
@@ -348,4 +339,3 @@ const TrackingView = forwardRef(function TrackingView(
 });
 
 export default TrackingView;
-export { FANFARE_MASTERIES, TICK_SEC };

@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { generateShareClip } from '../lib/shareClip.js';
-import { masteryFor } from '../lib/masteries.js';
-import { formatTime } from '../hooks/useTimer.js';
 
-const SHARE_URL = 'https://handstand.app';
+const SHARE_URL = 'https://playstando.com';
 
 /**
  * Share flow with a two-stage preview:
  *   1. Raw recording plays IMMEDIATELY when the modal opens (no waiting).
- *   2. Branded 9:16 clip renders in the background; when ready, the preview
- *      swaps to it and downloads default to the branded version.
- *
- * Direct-share buttons point at X, WhatsApp, Reddit, Telegram; the platforms
- * that don't accept file URLs get a pre-filled compose window + a toast
- * hinting the user to attach the just-downloaded clip.
+ *   2. For the handstand challenge, a branded 9:16 clip renders in the
+ *      background and the preview swaps to it when ready. Other challenges
+ *      use the raw recording only (the branded canvas pipeline is tuned for
+ *      time-based handstand HUDs; repurposing it per exercise is out of
+ *      scope for this pass).
  */
 export default function ShareModal({
   open,
   onClose,
+  challenge,
+  score,
   sourceBlob,
   durationMs,
   handle,
@@ -36,7 +35,8 @@ export default function ShareModal({
   const sharedFiredRef = useRef(false);
   const rawUrlRef = useRef(null);
 
-  // Instant raw preview — object URL from the recorded blob, revoked on close.
+  const supportsBranded = challenge?.scoreType === 'duration';
+
   const rawUrl = useMemo(() => {
     if (!open || !sourceBlob) return null;
     if (rawUrlRef.current) URL.revokeObjectURL(rawUrlRef.current);
@@ -61,8 +61,10 @@ export default function ShareModal({
     try { onShared?.('shared'); } catch {}
   }, [open, onShared]);
 
-  // Kick off branded render in parallel.
+  // Branded render — handstand only. Rep-based challenges stay on the raw
+  // preview, which is why we guard the entire effect below on supportsBranded.
   useEffect(() => {
+    if (!supportsBranded) return;
     if (!open || !sourceBlob || !(durationMs > 0)) return;
     const earnedKey = earnedKeys.join(',');
     const timelineLen = landmarkTimeline?.samples?.length || 0;
@@ -96,19 +98,19 @@ export default function ShareModal({
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sourceBlob, durationMs, handle, isPersonalBest, earnedKeys, landmarkTimeline, mirror]);
+  }, [open, sourceBlob, durationMs, handle, isPersonalBest, earnedKeys, landmarkTimeline, mirror, supportsBranded]);
 
   useEffect(() => {
     return () => { if (branded?.url) URL.revokeObjectURL(branded.url); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branded?.url]);
 
-  if (!open) return null;
+  if (!open || !challenge) return null;
 
-  const mastery = masteryFor(durationMs);
-  const rankLabel = mastery ? mastery.name : 'Toes Up!';
-  const timeText = formatTime(durationMs);
-  const text = `I held a handstand for ${timeText}${mastery ? ` · ${mastery.name}` : ''} — can you beat me?`;
+  const mastery = challenge.masteryFor(score ?? 0);
+  const rankLabel = mastery ? mastery.name : challenge.label;
+  const scoreText = challenge.formatScore(score ?? 0);
+  const text = challenge.copy.shareTemplate(score ?? 0, mastery?.name);
   const canWebShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   const currentClip = viewMode === 'branded' && branded ? branded : null;
@@ -116,7 +118,8 @@ export default function ShareModal({
 
   const filenameFor = (tag, mime) => {
     const ext = mime?.includes('mp4') ? 'mp4' : 'webm';
-    return `handstand-${tag}-${Math.floor(durationMs)}ms.${ext}`;
+    const metric = challenge.scoreType === 'reps' ? `${score}reps` : `${Math.floor(score ?? 0)}ms`;
+    return `${challenge.copy.filenameTag}-${tag}-${metric}.${ext}`;
   };
 
   const showToast = (msg) => {
@@ -132,7 +135,6 @@ export default function ShareModal({
     document.body.appendChild(a);
     a.click();
     a.remove();
-    // Keep the URL alive for a moment — some browsers need the tick.
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
@@ -150,7 +152,7 @@ export default function ShareModal({
     const filename = filenameFor(branded ? 'branded' : 'raw', mime);
     const file = new File([blob], filename, { type: mime });
     const shareData = {
-      title: `Handstand ${timeText} · ${rankLabel}`,
+      title: `${challenge.label} · ${scoreText} · ${rankLabel}`,
       text,
       files: [file],
     };
@@ -160,14 +162,10 @@ export default function ShareModal({
       } else {
         onDownload(branded ? 'branded' : 'raw');
       }
-    } catch {
-      /* user dismissed */
-    }
+    } catch { /* user dismissed */ }
   };
 
   const openIntent = (url, platform) => {
-    // Social platforms that don't accept video via URL — auto-download the
-    // file so the user can attach it in the compose window we just opened.
     downloadBlob(branded?.blob ?? sourceBlob, filenameFor(branded ? 'branded' : 'raw', branded?.mime ?? sourceBlob.type));
     window.open(url, '_blank', 'noopener,noreferrer,width=680,height=760');
     showToast(`Clip saved · paste it into ${platform}`);
@@ -205,6 +203,9 @@ export default function ShareModal({
 
   const progressPct = Math.round(progress * 100);
   const brandedReady = !!branded;
+  // For rep-based challenges the branded pipeline never runs, so share is
+  // ready as soon as the raw preview is.
+  const shareReady = supportsBranded ? brandedReady : !!rawUrl;
 
   return (
     <div
@@ -228,7 +229,7 @@ export default function ShareModal({
             · Your share clip
           </div>
           <div className="font-sans font-black tracking-tight text-2xl mt-1.5 leading-none">
-            {timeText}{' '}
+            {scoreText}{' '}
             <em className="font-serif italic font-light text-brand-accent">· {rankLabel}</em>
           </div>
           {isPersonalBest && (
@@ -265,8 +266,7 @@ export default function ShareModal({
             </div>
           )}
 
-          {/* Branded-render progress chip — visible until the branded render lands */}
-          {!error && (
+          {supportsBranded && !error && (
             <div className="absolute top-3 left-3 right-3 flex items-center gap-2 pointer-events-auto">
               <div className="flex-1 bg-black/65 backdrop-blur-sm border border-brand-border rounded-sm px-3 py-2">
                 <div className="flex items-center justify-between gap-3">
@@ -317,38 +317,35 @@ export default function ShareModal({
         </div>
 
         <div className="p-3 shrink-0 border-t border-brand-border space-y-2">
-          {/* Download is the primary action — saves the branded MP4 straight to
-              the filesystem. Web Share (if the browser supports it) sits beside
-              as a secondary, so users can still AirDrop / native-share when they
-              want to. Both wait on the branded render. */}
           <div className={`grid ${canWebShare ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
             <ActionBtn
               primary
-              onClick={() => onDownload('branded')}
-              disabled={!brandedReady}
-              title={brandedReady ? 'Save branded MP4 clip to disk' : 'Branded render in progress'}
+              onClick={() => onDownload(supportsBranded ? 'branded' : 'raw')}
+              disabled={!shareReady}
+              title={shareReady ? 'Save clip to disk' : 'Rendering'}
             >
-              {brandedReady ? 'Download MP4 ⤓' : `Rendering · ${progressPct}%`}
+              {supportsBranded
+                ? (brandedReady ? 'Download MP4 ⤓' : `Rendering · ${progressPct}%`)
+                : 'Download clip ⤓'}
             </ActionBtn>
             {canWebShare && (
-              <ActionBtn onClick={onWebShare} disabled={!brandedReady}>
-                {brandedReady ? 'Share…' : 'Rendering…'}
+              <ActionBtn onClick={onWebShare} disabled={!shareReady}>
+                {shareReady ? 'Share…' : 'Rendering…'}
               </ActionBtn>
             )}
           </div>
 
-          {/* Social row — share buttons wait on the branded render so viewers always see the themed clip */}
           <div className="grid grid-cols-5 gap-2">
-            <SocialBtn onClick={onShareTwitter} label="X" disabled={!brandedReady}>
+            <SocialBtn onClick={onShareTwitter} label="X" disabled={!shareReady}>
               <span className="font-black">𝕏</span>
             </SocialBtn>
-            <SocialBtn onClick={onShareWhatsApp} label="WhatsApp" disabled={!brandedReady}>
+            <SocialBtn onClick={onShareWhatsApp} label="WhatsApp" disabled={!shareReady}>
               <span>💬</span>
             </SocialBtn>
-            <SocialBtn onClick={onShareReddit} label="Reddit" disabled={!brandedReady}>
+            <SocialBtn onClick={onShareReddit} label="Reddit" disabled={!shareReady}>
               <span className="font-black">R</span>
             </SocialBtn>
-            <SocialBtn onClick={onShareTelegram} label="Telegram" disabled={!brandedReady}>
+            <SocialBtn onClick={onShareTelegram} label="Telegram" disabled={!shareReady}>
               <span>✈</span>
             </SocialBtn>
             <SocialBtn onClick={onCopyLink} label="Copy link">

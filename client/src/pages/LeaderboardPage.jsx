@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { formatTime } from '../hooks/useTimer.js';
-import { masteryFor } from '../lib/masteries.js';
+import { CHALLENGES, challengeOrDefault } from '../lib/challenges/index.js';
 import { useAuth } from '../lib/auth.jsx';
 
 const PERIODS = [
@@ -17,18 +16,19 @@ function fmtLastAttempt(iso) {
 }
 
 export default function LeaderboardPage() {
+  const navigate = useNavigate();
+  const { challenge: challengeParam } = useParams();
+  const challenge = challengeOrDefault(challengeParam);
   const { user } = useAuth();
   const [period, setPeriod] = useState('all');
   const [rows, setRows] = useState(null);
   const [personal, setPersonal] = useState(null);
   const [err, setErr] = useState(null);
 
-  // Public rows — always fetch. No auth in this path, so it can never hang.
-  // A 10s watchdog surfaces blocked/hung requests (ad-blocker eating
-  // *.supabase.co, offline, etc.) instead of sitting on "Loading…" forever.
   useEffect(() => {
     let cancelled = false;
     setErr(null);
+    setRows(null);
     const load = () => {
       const watchdog = setTimeout(() => {
         if (cancelled) return;
@@ -36,25 +36,30 @@ export default function LeaderboardPage() {
           'Leaderboard request did not return (the request to supabase.co may be blocked — check ad-blocker / privacy extension / Network tab).'
         );
       }, 10_000);
-      return api.leaderboardRows(period)
+      return api.leaderboardRows(period, challenge.id)
         .then((r) => { if (!cancelled) { clearTimeout(watchdog); setRows(r); setErr(null); } })
         .catch((e) => { if (!cancelled) { clearTimeout(watchdog); setErr(e.message); } });
     };
     load();
     const t = setInterval(load, 30_000);
     return () => { cancelled = true; clearInterval(t); };
-  }, [period]);
+  }, [period, challenge.id]);
 
-  // Personal standing — optional decoration, decoupled from rows. Any failure
-  // here leaves rows visible.
   useEffect(() => {
     if (!user) { setPersonal(null); return; }
     let cancelled = false;
-    api.leaderboardStanding(user.id, period)
+    api.leaderboardStanding(user.id, period, challenge.id)
       .then((p) => { if (!cancelled) setPersonal(p); })
       .catch(() => { if (!cancelled) setPersonal(null); });
     return () => { cancelled = true; };
-  }, [user, period]);
+  }, [user, period, challenge.id]);
+
+  const personalScore = useMemo(() => {
+    if (!personal) return null;
+    return challenge.scoreType === 'reps' ? personal.best_reps : personal.best_time_ms;
+  }, [personal, challenge.scoreType]);
+
+  const headlineUnit = challenge.scoreType === 'reps' ? 'Most reps · rolling' : 'Longest holds · rolling';
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-7 py-10 md:py-14">
@@ -63,11 +68,31 @@ export default function LeaderboardPage() {
           Leader<em className="font-serif italic font-light text-brand-accent">board.</em>
         </h1>
         <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-white/55">
-          Longest holds · rolling
+          {challenge.label} · {headlineUnit}
         </div>
       </div>
 
-      {personal && (
+      <div className="flex gap-2 mb-5 flex-wrap">
+        {CHALLENGES.map((c) => {
+          const active = c.id === challenge.id;
+          return (
+            <button
+              key={c.id}
+              onClick={() => navigate(`/leaderboard/${c.id}`)}
+              className={`font-mono uppercase tracking-[0.18em] text-[11px] font-bold px-4 py-2.5 rounded-sm transition border flex items-center gap-2 ${
+                active
+                  ? 'bg-white text-ink-900 border-white'
+                  : 'text-white/70 hover:text-white border-brand-border hover:border-white/30'
+              }`}
+            >
+              <span aria-hidden style={{ color: active ? '#000' : c.accent }}>{c.icon}</span>
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {personal && personalScore != null && (
         <div className="mb-6 border border-brand-border rounded-md bg-brand-paper px-5 py-4 flex items-baseline gap-4 flex-wrap">
           <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-brand-accent">
             · You are
@@ -83,7 +108,7 @@ export default function LeaderboardPage() {
             Best
           </div>
           <div className="font-sans font-black tabular-nums text-2xl text-brand-accent">
-            {formatTime(personal.best_time_ms)}
+            {challenge.formatScore(personalScore)}
           </div>
         </div>
       )}
@@ -137,7 +162,8 @@ export default function LeaderboardPage() {
           {rows.map((row, i) => {
             const place = i + 1;
             const top = place === 1;
-            const mastery = masteryFor(row.best_time_ms);
+            const score = challenge.scoreType === 'reps' ? row.best_reps : row.best_time_ms;
+            const mastery = challenge.masteryFor(score ?? 0);
             return (
               <Link
                 to={`/profile/${row.user_id}`}
@@ -160,7 +186,7 @@ export default function LeaderboardPage() {
                 <div className={`col-span-6 sm:col-span-2 text-right font-sans font-black tabular-nums text-xl md:text-2xl ${
                   top ? 'text-brand-accent' : 'text-white'
                 }`}>
-                  {formatTime(row.best_time_ms)}
+                  {challenge.formatScore(score ?? 0)}
                 </div>
                 <div className="col-span-3 sm:col-span-2 text-right font-mono tabular-nums text-[11px] tracking-[0.18em] text-white/55">
                   {row.total_attempts}

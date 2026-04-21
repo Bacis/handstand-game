@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import Home from './pages/Home.jsx';
 import Track from './pages/Track.jsx';
+import PlayPicker from './pages/PlayPicker.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import Profile from './pages/Profile.jsx';
 import SkeletonLab from './pages/SkeletonLab.jsx';
@@ -36,7 +37,7 @@ function NavBar() {
       <div className="flex items-center justify-between px-4 md:px-7 py-[18px] font-mono uppercase tracking-[0.14em] text-[11px]">
         <Link to="/" className="flex items-center gap-2.5 font-bold text-white">
           <span className="inline-grid place-items-center w-[22px] h-[22px] bg-brand-accent text-black font-extrabold font-sans leading-none rotate-180">▲</span>
-          <span>handstand</span>
+          <span>playstando</span>
         </Link>
 
         <nav className="hidden md:flex gap-[22px]">
@@ -176,9 +177,11 @@ export default function App() {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/play" element={<Track />} />
+            <Route path="/play" element={<PlayPicker />} />
+            <Route path="/play/:challenge" element={<Track />} />
             <Route path="/track" element={<Navigate to="/play" replace />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
+            <Route path="/leaderboard/:challenge" element={<LeaderboardPage />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/skeleton-lab" element={<SkeletonLab />} />
             <Route path="/badges" element={<BadgeLab />} />

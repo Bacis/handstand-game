@@ -8,7 +8,11 @@ const INPUT =
 const LABEL =
   'font-mono uppercase tracking-[0.22em] text-[10px] text-white/55';
 
-export default function SaveScoreModal({ open, durationMs, onSave, onDiscard, submitting, error }) {
+export default function SaveScoreModal({ open, challenge, score, durationMs, onSave, onDiscard, submitting, error }) {
+  const scoreDisplay = challenge
+    ? challenge.formatScore(score ?? 0)
+    : formatTime(durationMs ?? 0);
+  const niceLabel = challenge ? `· Nice ${challenge.verb.toLowerCase()}` : '· Nice hold';
   const { user, login, register } = useAuth();
   const [mode, setMode] = useState('register');
   const [form, setForm] = useState({ username: '', email: '', password: '' });
@@ -53,9 +57,9 @@ export default function SaveScoreModal({ open, durationMs, onSave, onDiscard, su
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 pt-6 pb-5 text-center border-b border-brand-border">
-          <div className={LABEL}>· Nice hold</div>
+          <div className={LABEL}>{niceLabel}</div>
           <div className="font-sans font-black tabular-nums text-5xl mt-2 leading-none">
-            {formatTime(durationMs)}
+            {scoreDisplay}
           </div>
           <div className="font-serif italic font-light text-brand-accent text-sm mt-1.5">
             submit to the ladder?
