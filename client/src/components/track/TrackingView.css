@@ -70,15 +70,15 @@
   border: 2px solid var(--green);
   opacity: 0.85;
 }
-.ts-corner.tl { top: 18px; left: 18px; border-right: 0; border-bottom: 0; }
-.ts-corner.tr { top: 18px; right: 18px; border-left: 0; border-bottom: 0; }
-.ts-corner.bl { bottom: 18px; left: 18px; border-right: 0; border-top: 0; }
-.ts-corner.br { bottom: 18px; right: 18px; border-left: 0; border-top: 0; }
+.ts-corner.tl { top: calc(18px + env(safe-area-inset-top)); left: calc(18px + env(safe-area-inset-left)); border-right: 0; border-bottom: 0; }
+.ts-corner.tr { top: calc(18px + env(safe-area-inset-top)); right: calc(18px + env(safe-area-inset-right)); border-left: 0; border-bottom: 0; }
+.ts-corner.bl { bottom: calc(18px + env(safe-area-inset-bottom)); left: calc(18px + env(safe-area-inset-left)); border-right: 0; border-top: 0; }
+.ts-corner.br { bottom: calc(18px + env(safe-area-inset-bottom)); right: calc(18px + env(safe-area-inset-right)); border-left: 0; border-top: 0; }
 
 .ts-rec {
   position: absolute;
-  top: 20px;
-  left: 52px;
+  top: calc(20px + env(safe-area-inset-top));
+  left: calc(52px + env(safe-area-inset-left));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -102,8 +102,8 @@
 
 .ts-cam {
   position: absolute;
-  top: 20px;
-  right: 52px;
+  top: calc(20px + env(safe-area-inset-top));
+  right: calc(52px + env(safe-area-inset-right));
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -237,7 +237,7 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: 0.22em;
@@ -327,7 +327,7 @@
 /* ---------- Top toolbar (source + checkboxes) ---------- */
 .ts-toolbar {
   position: absolute;
-  top: 16px;
+  top: calc(16px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
@@ -335,6 +335,9 @@
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
+  flex-wrap: wrap;
+  max-width: calc(100% - 24px);
+  justify-content: center;
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
@@ -347,7 +350,10 @@
   pointer-events: auto;
 }
 .ts-toolbar .chip {
-  padding: 7px 12px;
+  padding: 10px 14px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
@@ -356,8 +362,11 @@
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
+  touch-action: manipulation;
 }
-.ts-toolbar .chip:hover { color: #fff; }
+.ts-toolbar .chip:hover,
+.ts-toolbar .chip:focus-visible { color: #fff; outline: none; }
+.ts-toolbar .chip:active { color: #fff; background: rgba(255, 255, 255, 0.08); }
 .ts-toolbar .chip.on {
   background: #fff;
   color: #0a0a0b;
@@ -374,8 +383,10 @@
   align-items: center;
   gap: 6px;
   color: rgba(255, 255, 255, 0.7);
-  padding: 0 8px;
+  padding: 10px 10px;
+  min-height: 40px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .ts-toolbar .toggle input { accent-color: var(--accent); }
 
@@ -384,7 +395,7 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
   z-index: 55;
   display: flex;
   gap: 10px;
@@ -394,7 +405,8 @@
   max-width: calc(100% - 48px);
 }
 .ts-btn {
-  padding: 14px 20px;
+  padding: 14px 18px;
+  min-height: 48px;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-weight: 700;
   font-size: 11px;
@@ -405,16 +417,46 @@
   display: inline-flex;
   gap: 10px;
   align-items: center;
+  justify-content: center;
   transition: all 0.15s;
   border: 1px solid #2a2a2d;
   background: rgba(10, 10, 11, 0.8);
   color: #fff;
   backdrop-filter: blur(4px);
+  touch-action: manipulation;
 }
 .ts-btn.primary { background: var(--accent); color: #000; border-color: var(--accent); }
 .ts-btn.green   { background: var(--green);  color: #000; border-color: var(--green); }
-.ts-btn.ghost:hover { border-color: #fff; }
+.ts-btn.ghost:hover,
+.ts-btn.ghost:focus-visible { border-color: #fff; outline: none; }
+.ts-btn.ghost:active { border-color: #fff; background: rgba(255, 255, 255, 0.08); }
+.ts-btn.primary:active { filter: brightness(0.92); }
+.ts-btn.green:active   { filter: brightness(0.92); }
 .ts-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* "End attempt" manual exit — shown only during TRACKING, bottom-center.
+   Escape hatch for when the classifier misses a drop and the timer keeps
+   counting past the end of the hold. */
+.ts-end-rail {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 55;
+  pointer-events: auto;
+}
+.ts-btn.end-attempt {
+  background: rgba(255, 77, 46, 0.15);
+  border-color: rgba(255, 77, 46, 0.55);
+  color: #ff6d5c;
+}
+.ts-btn.end-attempt:hover,
+.ts-btn.end-attempt:focus-visible {
+  background: rgba(255, 77, 46, 0.28);
+  border-color: rgba(255, 77, 46, 0.9);
+  color: #fff;
+  outline: none;
+}
 
 .ts-error {
   position: absolute;
@@ -467,11 +509,71 @@
   display: none;
 }
 
-@media (max-width: 720px) {
-  .ts-tel { left: 10px; top: 72px; min-width: 160px; font-size: 9px; padding: 8px 10px; }
-  .ts-rec { left: 44px; }
-  .ts-cam { right: 44px; font-size: 10px; }
-  .ts-ranks { right: 10px; }
-  .ts-next { bottom: 58px; }
-  .ts-status { font-size: 9px; padding: 6px 10px; bottom: 14px; }
+@media (max-width: 768px) {
+  .ts-tel {
+    left: calc(10px + env(safe-area-inset-left));
+    top: calc(72px + env(safe-area-inset-top));
+    min-width: 150px;
+    font-size: 9px;
+    padding: 8px 10px;
+  }
+  .ts-rec { left: calc(44px + env(safe-area-inset-left)); }
+  .ts-cam { right: calc(44px + env(safe-area-inset-right)); font-size: 10px; }
+  .ts-ranks { right: calc(10px + env(safe-area-inset-right)); width: 6px; }
+  .ts-next {
+    left: calc(16px + env(safe-area-inset-left));
+    right: calc(16px + env(safe-area-inset-right));
+    bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+  .ts-status {
+    font-size: 9px;
+    padding: 6px 10px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+    white-space: normal;
+    text-align: center;
+  }
+  .ts-sky::after,
+  .ts-gnd::after { display: none; }
+  .ts-toolbar { font-size: 9px; gap: 4px; padding: 5px 6px; }
+  .ts-toolbar .chip { padding: 9px 11px; min-height: 38px; }
+}
+
+@media (max-width: 480px) {
+  .ts-corner { width: 14px; height: 14px; }
+  .ts-corner.tl { top: calc(10px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); }
+  .ts-corner.tr { top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); }
+  .ts-corner.bl { bottom: calc(10px + env(safe-area-inset-bottom)); left: calc(10px + env(safe-area-inset-left)); }
+  .ts-corner.br { bottom: calc(10px + env(safe-area-inset-bottom)); right: calc(10px + env(safe-area-inset-right)); }
+  .ts-tel { display: none; }
+  .ts-ranks { display: none; }
+  .ts-rec { top: calc(14px + env(safe-area-inset-top)); left: calc(32px + env(safe-area-inset-left)); font-size: 10px; }
+  .ts-cam { top: calc(14px + env(safe-area-inset-top)); right: calc(32px + env(safe-area-inset-right)); font-size: 9px; }
+  .ts-timer { top: 44px; font-size: clamp(44px, 14vw, 84px); }
+  .ts-rank { top: calc(44px + clamp(44px, 14vw, 84px) + 6px); font-size: 10px; padding: 5px 11px; }
+  .ts-next {
+    bottom: calc(120px + env(safe-area-inset-bottom));
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+  }
+  .ts-status {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 24px);
+    white-space: normal;
+    text-align: center;
+  }
+  .ts-status .next { display: none; }
+  .ts-action-rail {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+    max-width: none;
+    transform: none;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .ts-btn { width: 100%; padding: 14px 16px; font-size: 12px; }
 }

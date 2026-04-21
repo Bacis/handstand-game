@@ -63,6 +63,7 @@ const TrackingView = forwardRef(function TrackingView(
     videoRef,
     landmarks,
     videoAspect = 16 / 9,
+    videoSize,
     elapsedMs,
     active,
     ready,
@@ -85,6 +86,7 @@ const TrackingView = forwardRef(function TrackingView(
     completeLabel,
     actions,
     mirror = false,
+    onEndAttempt = null,
   },
   ref,
 ) {
@@ -177,7 +179,7 @@ const TrackingView = forwardRef(function TrackingView(
           <span className="dot" />
           {recording ? 'REC · 30fps' : 'STANDBY'}
         </div>
-        <div className="ts-cam">CAM · 1280×720</div>
+        <div className="ts-cam">CAM · {videoSize || '—'}</div>
 
         <div className={`ts-timer ${heat}`}>
           {parts.mm}:<span>{parts.ss}</span>
@@ -296,6 +298,19 @@ const TrackingView = forwardRef(function TrackingView(
       {complete && actions && (
         <div className="ts-action-rail">
           {actions}
+        </div>
+      )}
+
+      {onEndAttempt && (
+        <div className="ts-end-rail">
+          <button
+            type="button"
+            className="ts-btn end-attempt"
+            onClick={onEndAttempt}
+            title="Force end of attempt — use if the timer didn't stop after you dropped"
+          >
+            End attempt ✕
+          </button>
         </div>
       )}
 

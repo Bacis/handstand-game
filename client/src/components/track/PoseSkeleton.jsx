@@ -1,18 +1,5 @@
 import { memo } from 'react';
-
-// MediaPipe Pose connections. Matches @mediapipe/tasks-vision landmark indices.
-const CONNECTIONS = [
-  [11, 13], [13, 15],                          // left arm
-  [12, 14], [14, 16],                          // right arm
-  [11, 12], [11, 23], [12, 24], [23, 24],      // torso
-  [23, 25], [25, 27], [24, 26], [26, 28],      // legs
-  [27, 29], [29, 31], [27, 31],                // left foot
-  [28, 30], [30, 32], [28, 32],                // right foot
-];
-const HEAD_JOINT = 0; // nose — rendered larger
-const JOINTS_TO_DOT = [
-  0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
-];
+import { CONNECTIONS, HEAD_JOINT, JOINTS_TO_DOT } from '../../lib/poseSkeleton.js';
 
 // SVG overlay that renders MediaPipe landmarks as a dashed green skeleton with
 // joint dots + soft glow. `mirror` flips x for webcam "selfie" view.

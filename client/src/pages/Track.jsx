@@ -17,6 +17,7 @@ import { crossedTick } from '../lib/milestones.js';
 import { masteryFor } from '../lib/masteries.js';
 import { playTickSound, tickReset, unlockAudio, playPersonalBestSound } from '../lib/sounds.js';
 import { getPersonalBest, setPersonalBest as savePersonalBest } from '../lib/personalBest.js';
+import { createPoseBuffer } from '../lib/poseCaptureBuffer.js';
 
 const STATUS_TEXT = {
   [STATE.IDLE]:      'Position yourself in frame',
@@ -44,6 +45,7 @@ export default function Track() {
   const [debug, setDebug] = useState(false);
   const [loopFile, setLoopFile] = useState(false);
   const [videoAspect, setVideoAspect] = useState(16 / 9);
+  const [videoSize, setVideoSize] = useState(null);
 
   const camera = useCamera(videoRef, { enabled: source === 'webcam' });
   const file = useVideoFile(videoRef, fileUrl, { enabled: source === 'file', loop: loopFile });
@@ -61,9 +63,14 @@ export default function Track() {
 
   // sessionBest holds the longest attempt of the session. Only its recording
   // can be submitted / downloaded — later weaker attempts don't overwrite it.
-  const [sessionBest, setSessionBest] = useState({ durationMs: 0, blob: null, blobUrl: null, mime: null });
+  const [sessionBest, setSessionBest] = useState({ durationMs: 0, blob: null, blobUrl: null, mime: null, landmarkTimeline: null });
   const lastConsideredBlobRef = useRef(null);
   const [shareOpen, setShareOpen] = useState(false);
+
+  // Landmark timeline captured during TRACKING so the share clip can replay
+  // the pose skeleton on top of the recorded video.
+  const poseBufferRef = useRef(null);
+  if (poseBufferRef.current === null) poseBufferRef.current = createPoseBuffer();
 
   const [personalBest, setPersonalBestState] = useState(() => getPersonalBest());
   const [pbStatus, setPbStatus] = useState(null);   // 'new-pb' | 'close' | 'short' | null
@@ -77,20 +84,34 @@ export default function Track() {
 
   const resetTimerRef = useRef(() => {});
 
-  const { state, latest, handleFrame, reset, markSubmitted } = useHandstand({
+  const { state, latest, handleFrame, reset, forceComplete, markSubmitted } = useHandstand({
     onEnterTracking: () => {
       resetTimerRef.current();
       recorder.reset();
       setFinalDuration(0);
+      poseBufferRef.current.start();
       recorder.start();
     },
-    onExitTracking: () => recorder.stop(),
+    onExitTracking: () => {
+      poseBufferRef.current.stop();
+      recorder.stop();
+    },
   });
 
   const { elapsedMs, reset: resetTimer } = useTimer(state === STATE.TRACKING);
   useEffect(() => { resetTimerRef.current = resetTimer; }, [resetTimer]);
 
-  const { loaded: poseLoaded, error: poseErr } = usePose(videoRef, ready, handleFrame);
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  const onPoseFrame = useCallback((res) => {
+    if (stateRef.current === STATE.TRACKING && res?.landmarks) {
+      poseBufferRef.current.push(res.landmarks);
+    }
+    handleFrame(res);
+  }, [handleFrame]);
+
+  const { loaded: poseLoaded, error: poseErr } = usePose(videoRef, ready, onPoseFrame);
 
   const prevState = useRef(state);
   useEffect(() => {
@@ -107,9 +128,16 @@ export default function Track() {
     lastConsideredBlobRef.current = recorder.blob;
     if (finalDuration <= sessionBest.durationMs) return;
     const url = URL.createObjectURL(recorder.blob);
+    const landmarkTimeline = poseBufferRef.current.snapshot();
     setSessionBest((prev) => {
       if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl);
-      return { durationMs: finalDuration, blob: recorder.blob, blobUrl: url, mime: recorder.mime };
+      return {
+        durationMs: finalDuration,
+        blob: recorder.blob,
+        blobUrl: url,
+        mime: recorder.mime,
+        landmarkTimeline,
+      };
     });
   }, [recorder.blob, recorder.mime, finalDuration, sessionBest.durationMs]);
 
@@ -198,7 +226,10 @@ export default function Track() {
     const v = videoRef.current;
     if (!v) return;
     const on = () => {
-      if (v.videoWidth && v.videoHeight) setVideoAspect(v.videoWidth / v.videoHeight);
+      if (v.videoWidth && v.videoHeight) {
+        setVideoAspect(v.videoWidth / v.videoHeight);
+        setVideoSize(`${v.videoWidth}×${v.videoHeight}`);
+      }
     };
     v.addEventListener('loadedmetadata', on);
     return () => v.removeEventListener('loadedmetadata', on);
@@ -270,15 +301,6 @@ export default function Track() {
     setShowSaveModal(true);
   }, [user, state, finalDuration, sessionBest.durationMs]);
 
-  const downloadClip = useCallback(() => {
-    if (!sessionBest.blobUrl) return;
-    const a = document.createElement('a');
-    a.href = sessionBest.blobUrl;
-    const ext = sessionBest.mime?.includes('mp4') ? 'mp4' : 'webm';
-    a.download = `handstand-best-${Math.floor(sessionBest.durationMs)}ms.${ext}`;
-    a.click();
-  }, [sessionBest.blobUrl, sessionBest.mime, sessionBest.durationMs]);
-
   const displayMs =
     state === STATE.TRACKING
       ? elapsedMs
@@ -313,7 +335,7 @@ export default function Track() {
       </button>
       {sessionBest.blob && (
         <button type="button" className="ts-btn green" onClick={() => setShareOpen(true)}>
-          Share clip →
+          Export clip ⤓
         </button>
       )}
       {state === STATE.COMPLETE && (
@@ -326,21 +348,20 @@ export default function Track() {
           {submitting ? 'Saving…' : (user ? 'Submit' : 'Submit · register')}
         </button>
       )}
-      {sessionBest.blobUrl && (
-        <button type="button" className="ts-btn ghost" onClick={downloadClip}>
-          Raw clip ⤓
-        </button>
-      )}
     </>
   ) : null;
 
   return (
-    <div className="h-[calc(100vh-57px)] w-full relative">
+    <div
+      className="w-full relative"
+      style={{ height: 'calc(100svh - 57px)' }}
+    >
       <TrackingView
         ref={trackingRef}
         videoRef={videoRef}
         landmarks={latest.landmarks}
         videoAspect={videoAspect}
+        videoSize={videoSize}
         elapsedMs={displayMs}
         active={state === STATE.TRACKING}
         ready={ready}
@@ -362,6 +383,7 @@ export default function Track() {
         complete={complete}
         actions={actions}
         mirror={source === 'webcam'}
+        onEndAttempt={state === STATE.TRACKING ? forceComplete : null}
       />
 
       {debug && IS_DEV_HOST && (
@@ -379,6 +401,9 @@ export default function Track() {
         durationMs={sessionBest.durationMs}
         handle={user?.username}
         isPersonalBest={isNewPb}
+        landmarkTimeline={sessionBest.landmarkTimeline}
+        earnedKeys={achievements.sessionKeys}
+        mirror={source === 'webcam'}
         onShared={achievements.recordEvent}
       />
 

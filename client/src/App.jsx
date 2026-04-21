@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import Home from './pages/Home.jsx';
 import Track from './pages/Track.jsx';
@@ -13,15 +13,18 @@ function NavBar() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const [signInOpen, setSignInOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const navLink = (to, label) => {
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
+  const navLink = (to, label, extraClass = '') => {
     const active = to === '/' ? pathname === '/' : pathname.startsWith(to);
     return (
       <Link
         to={to}
         className={`font-mono uppercase tracking-[0.14em] text-[11px] transition ${
           active ? 'text-white' : 'text-white/70 hover:text-white'
-        }`}
+        } ${extraClass}`}
       >
         {label}
       </Link>
@@ -62,13 +65,13 @@ function NavBar() {
             <>
               <Link
                 to={`/profile/${user.id}`}
-                className="font-mono uppercase tracking-[0.14em] text-[11px] text-white/85 hover:text-white"
+                className="hidden sm:inline font-mono uppercase tracking-[0.14em] text-[11px] text-white/85 hover:text-white"
               >
                 {user.username}
               </Link>
               <button
                 onClick={logout}
-                className="font-mono uppercase tracking-[0.14em] text-[11px] text-white/60 hover:text-white"
+                className="hidden sm:inline font-mono uppercase tracking-[0.14em] text-[11px] text-white/60 hover:text-white"
               >
                 Logout
               </button>
@@ -77,12 +80,80 @@ function NavBar() {
             <button
               onClick={() => setSignInOpen(true)}
               className="font-mono uppercase tracking-[0.14em] text-[11px] text-white/80 hover:text-white"
+              style={{ touchAction: 'manipulation' }}
             >
               Sign in
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            className="md:hidden inline-grid place-items-center w-10 h-10 -mr-2 text-white/80 hover:text-white"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <span className="block relative w-5 h-[14px]">
+              <span
+                className={`absolute left-0 right-0 h-[2px] bg-current transition-transform ${
+                  menuOpen ? 'top-1/2 -translate-y-1/2 rotate-45' : 'top-0'
+                }`}
+              />
+              <span
+                className={`absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[2px] bg-current transition-opacity ${
+                  menuOpen ? 'opacity-0' : 'opacity-100'
+                }`}
+              />
+              <span
+                className={`absolute left-0 right-0 h-[2px] bg-current transition-transform ${
+                  menuOpen ? 'top-1/2 -translate-y-1/2 -rotate-45' : 'bottom-0'
+                }`}
+              />
+            </span>
+          </button>
         </div>
       </div>
+
+      {menuOpen && (
+        <nav className="md:hidden border-t border-white/5 bg-ink-900/98 backdrop-blur flex flex-col">
+          {navLink('/play', 'Play', 'px-5 py-4 border-b border-white/5')}
+          {navLink('/leaderboard', 'Leaderboard', 'px-5 py-4 border-b border-white/5')}
+          <a
+            href="/#ranks"
+            onClick={() => setMenuOpen(false)}
+            className="px-5 py-4 border-b border-white/5 font-mono uppercase tracking-[0.14em] text-[11px] text-white/70 hover:text-white transition"
+          >
+            Ranks · 40
+          </a>
+          <a
+            href="/#how"
+            onClick={() => setMenuOpen(false)}
+            className="px-5 py-4 border-b border-white/5 font-mono uppercase tracking-[0.14em] text-[11px] text-white/70 hover:text-white transition"
+          >
+            How
+          </a>
+          {user && (
+            <>
+              <Link
+                to={`/profile/${user.id}`}
+                className="px-5 py-4 border-b border-white/5 font-mono uppercase tracking-[0.14em] text-[11px] text-white/85 hover:text-white"
+              >
+                {user.username}
+              </Link>
+              <button
+                onClick={() => { setMenuOpen(false); logout(); }}
+                className="px-5 py-4 border-b border-white/5 text-left font-mono uppercase tracking-[0.14em] text-[11px] text-white/60 hover:text-white"
+              >
+                Logout
+              </button>
+            </>
+          )}
+          <span className="px-5 py-3 inline-flex items-center gap-2 text-brand-accent font-mono uppercase tracking-[0.14em] text-[11px]">
+            <span className="w-2 h-2 rounded-full bg-brand-accent motion-safe:animate-[pulseOp_1.2s_ease-in-out_infinite]" />
+            14 holding now
+          </span>
+        </nav>
+      )}
       {signInOpen && (
         <div
           className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"

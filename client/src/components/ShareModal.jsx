@@ -15,7 +15,18 @@ const SHARE_URL = 'https://handstand.app';
  * that don't accept file URLs get a pre-filled compose window + a toast
  * hinting the user to attach the just-downloaded clip.
  */
-export default function ShareModal({ open, onClose, sourceBlob, durationMs, handle, isPersonalBest, onShared }) {
+export default function ShareModal({
+  open,
+  onClose,
+  sourceBlob,
+  durationMs,
+  handle,
+  isPersonalBest,
+  landmarkTimeline = null,
+  earnedKeys = [],
+  mirror = false,
+  onShared,
+}) {
   const [progress, setProgress] = useState(0);
   const [branded, setBranded] = useState(null); // { blob, url, mime }
   const [error, setError] = useState(null);
@@ -53,7 +64,9 @@ export default function ShareModal({ open, onClose, sourceBlob, durationMs, hand
   // Kick off branded render in parallel.
   useEffect(() => {
     if (!open || !sourceBlob || !(durationMs > 0)) return;
-    const key = `${sourceBlob.size}_${durationMs}_${handle}_${isPersonalBest}`;
+    const earnedKey = earnedKeys.join(',');
+    const timelineLen = landmarkTimeline?.samples?.length || 0;
+    const key = `${sourceBlob.size}_${durationMs}_${handle}_${isPersonalBest}_${earnedKey}_${timelineLen}_${mirror}`;
     if (lastInputRef.current === key && branded) return;
     lastInputRef.current = key;
 
@@ -68,6 +81,9 @@ export default function ShareModal({ open, onClose, sourceBlob, durationMs, hand
       durationMs,
       handle: handle ? `@${handle}` : 'anon',
       isPersonalBest: !!isPersonalBest,
+      landmarkTimeline,
+      earnedKeys,
+      mirror,
       onProgress: (p) => { if (!cancelled) setProgress(p); },
     })
       .then((res) => {
@@ -80,7 +96,7 @@ export default function ShareModal({ open, onClose, sourceBlob, durationMs, hand
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sourceBlob, durationMs, handle, isPersonalBest]);
+  }, [open, sourceBlob, durationMs, handle, isPersonalBest, earnedKeys, landmarkTimeline, mirror]);
 
   useEffect(() => {
     return () => { if (branded?.url) URL.revokeObjectURL(branded.url); };
@@ -301,37 +317,38 @@ export default function ShareModal({ open, onClose, sourceBlob, durationMs, hand
         </div>
 
         <div className="p-3 shrink-0 border-t border-brand-border space-y-2">
-          {/* Primary row: native share + download */}
-          <div className="grid grid-cols-2 gap-2">
-            {canWebShare ? (
-              <ActionBtn primary onClick={onWebShare}>
-                Share
-              </ActionBtn>
-            ) : (
-              <ActionBtn primary onClick={() => onDownload(branded ? 'branded' : 'raw')}>
-                {brandedReady ? 'Download branded' : 'Download raw'}
+          {/* Download is the primary action — saves the branded MP4 straight to
+              the filesystem. Web Share (if the browser supports it) sits beside
+              as a secondary, so users can still AirDrop / native-share when they
+              want to. Both wait on the branded render. */}
+          <div className={`grid ${canWebShare ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+            <ActionBtn
+              primary
+              onClick={() => onDownload('branded')}
+              disabled={!brandedReady}
+              title={brandedReady ? 'Save branded MP4 clip to disk' : 'Branded render in progress'}
+            >
+              {brandedReady ? 'Download MP4 ⤓' : `Rendering · ${progressPct}%`}
+            </ActionBtn>
+            {canWebShare && (
+              <ActionBtn onClick={onWebShare} disabled={!brandedReady}>
+                {brandedReady ? 'Share…' : 'Rendering…'}
               </ActionBtn>
             )}
-            <ActionBtn
-              onClick={() => onDownload(brandedReady ? 'branded' : 'raw')}
-              title={brandedReady ? 'Download branded clip' : 'Download raw recording (branded render pending)'}
-            >
-              {brandedReady ? 'Download ⤓' : 'Download raw ⤓'}
-            </ActionBtn>
           </div>
 
-          {/* Social row */}
+          {/* Social row — share buttons wait on the branded render so viewers always see the themed clip */}
           <div className="grid grid-cols-5 gap-2">
-            <SocialBtn onClick={onShareTwitter} label="X">
+            <SocialBtn onClick={onShareTwitter} label="X" disabled={!brandedReady}>
               <span className="font-black">𝕏</span>
             </SocialBtn>
-            <SocialBtn onClick={onShareWhatsApp} label="WhatsApp">
+            <SocialBtn onClick={onShareWhatsApp} label="WhatsApp" disabled={!brandedReady}>
               <span>💬</span>
             </SocialBtn>
-            <SocialBtn onClick={onShareReddit} label="Reddit">
+            <SocialBtn onClick={onShareReddit} label="Reddit" disabled={!brandedReady}>
               <span className="font-black">R</span>
             </SocialBtn>
-            <SocialBtn onClick={onShareTelegram} label="Telegram">
+            <SocialBtn onClick={onShareTelegram} label="Telegram" disabled={!brandedReady}>
               <span>✈</span>
             </SocialBtn>
             <SocialBtn onClick={onCopyLink} label="Copy link">
@@ -357,13 +374,14 @@ function ActionBtn({ children, primary = false, ...rest }) {
   );
 }
 
-function SocialBtn({ children, label, onClick }) {
+function SocialBtn({ children, label, onClick, disabled = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={`Share on ${label}`}
-      className="flex flex-col items-center gap-1 py-2.5 rounded-sm border border-white/20 hover:border-white/45 text-white/85 hover:text-white transition"
+      className="flex flex-col items-center gap-1 py-2.5 rounded-sm border border-white/20 hover:border-white/45 text-white/85 hover:text-white transition disabled:opacity-40 disabled:hover:border-white/20"
     >
       <span className="text-base leading-none">{children}</span>
       <span className="font-mono uppercase tracking-[0.18em] text-[9px]">{label}</span>

@@ -119,7 +119,10 @@
   cursor: pointer;
   transition: transform 120ms ease;
 }
-.hero-game .play-btn:hover { transform: translateY(-1px); }
+.hero-game .play-btn:hover,
+.hero-game .play-btn:focus-visible { transform: translateY(-1px); outline: none; }
+.hero-game .play-btn:active { transform: translateY(0); filter: brightness(0.92); }
+.hero-game .play-btn { touch-action: manipulation; }
 .hero-game .play-btn .i {
   width: 16px;
   height: 16px;
@@ -412,4 +415,61 @@
   .hero-game .play-how { grid-template-columns: 1fr; }
   .hero-game .play-how .s { border-right: 0; border-bottom: 1px solid #2a2a2d; }
   .hero-game .play-how .s:last-child { border-bottom: 0; }
+}
+
+@media (max-width: 768px) {
+  .hero-game .play-main { padding: 16px 16px 24px; }
+  .hero-game .play-head { font-size: clamp(36px, 9vw, 60px); }
+  .hero-game .play-sub { font-size: 15px; }
+  .hero-game .play-right {
+    min-height: 360px;
+    aspect-ratio: 4 / 3;
+  }
+  .hero-game .vf-timer { font-size: clamp(44px, 13vw, 96px); top: 44px; }
+  .hero-game .vf-rank {
+    top: calc(44px + clamp(44px, 13vw, 96px) + 6px);
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+  .hero-game .vf-ranks { right: 12px; width: 6px; top: 56px; bottom: 56px; }
+}
+
+@media (max-width: 480px) {
+  .hero-game .play-main { padding: 14px; gap: 16px; }
+  .hero-game .play-head { font-size: clamp(32px, 10vw, 48px); }
+  .hero-game .play-sub { font-size: 14px; }
+  .hero-game .play-ctas { gap: 10px; flex-direction: column; align-items: stretch; }
+  .hero-game .play-btn {
+    padding: 16px 18px;
+    font-size: 12px;
+    gap: 10px;
+    justify-content: center;
+    width: 100%;
+  }
+  .hero-game .play-right { min-height: 320px; }
+  .hero-game .vf-corner { width: 16px; height: 16px; }
+  .hero-game .vf-corner.tl { top: 10px; left: 10px; }
+  .hero-game .vf-corner.tr { top: 10px; right: 10px; }
+  .hero-game .vf-corner.bl { bottom: 10px; left: 10px; }
+  .hero-game .vf-corner.br { bottom: 10px; right: 10px; }
+  .hero-game .vf-rec { top: 12px; left: 32px; font-size: 10px; }
+  .hero-game .vf-cam { top: 12px; right: 32px; font-size: 9px; }
+  .hero-game .vf-timer { font-size: clamp(40px, 14vw, 72px); top: 36px; }
+  .hero-game .vf-rank {
+    top: calc(36px + clamp(40px, 14vw, 72px) + 6px);
+    font-size: 10px;
+    padding: 4px 9px;
+  }
+  .hero-game .vf-ranks { right: 10px; width: 5px; top: 48px; bottom: 48px; }
+  .hero-game .vf-status {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    bottom: 14px;
+    padding: 6px 10px;
+    max-width: calc(100% - 24px);
+    white-space: normal;
+    text-align: center;
+  }
+  .hero-game .vf-sky::after,
+  .hero-game .vf-gnd::after { display: none; }
 }

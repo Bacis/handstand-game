@@ -1,5 +1,8 @@
 import { crossedTick } from './milestones.js';
 import { masteryFor, MASTERIES } from './masteries.js';
+import { drawPoseSkeletonCanvas } from './poseSkeleton.js';
+import { findNearest } from './poseCaptureBuffer.js';
+import { findAchievement } from './achievements.js';
 
 // Full-HD vertical (matches TikTok/Reels/Shorts native resolution).
 const W = 1080;
@@ -62,10 +65,31 @@ async function preloadFonts() {
   }
 }
 
+// Unlock thresholds (ms) for duration-gated achievements — used to pop badges
+// in during playback exactly when each one would've fired in /play. Kept in
+// sync by hand with the `check` predicates in lib/achievements.js. Any key not
+// in this map appears immediately (t=0).
+const BADGE_UNLOCK_MS = {
+  first_liftoff: 3_000,
+  five_club:     5_000,
+  fifteen_club:  15_000,
+  half_minute:   30_000,
+  minute_maker:  60_000,
+  nice:          69_000,
+  two_min_titan: 120_000,
+};
+
+const TIER_GRAD = {
+  bronze: ['#cd7f32', '#5a2e0b'],
+  silver: ['#22d3ee', '#0e7490'],
+  gold:   ['#facc15', '#854d0e'],
+  mythic: ['#cd7f32', '#facc15'],
+};
+
 /**
  * Render the recorded handstand clip onto a 9:16 canvas with the /play HUD —
  * corner brackets, green timer, rank pill, sky/floor lines, milestone wire-
- * banner — then capture it back as a video Blob.
+ * banner, pose skeleton, achievement badges — then capture it as a video Blob.
  *
  * Returns { blob, mime, durationMs } once the source clip has played through.
  *
@@ -74,9 +98,21 @@ async function preloadFonts() {
  * @param {number} opts.durationMs
  * @param {string} opts.handle
  * @param {boolean} opts.isPersonalBest
+ * @param {object} [opts.landmarkTimeline]   snapshot from createPoseBuffer
+ * @param {string[]} [opts.earnedKeys]       achievement keys to stack on the right
+ * @param {boolean} [opts.mirror]            true for selfie webcam source
  * @param {(progress:number)=>void} [opts.onProgress]
  */
-export async function generateShareClip({ srcBlob, durationMs, handle = 'anon', isPersonalBest = false, onProgress }) {
+export async function generateShareClip({
+  srcBlob,
+  durationMs,
+  handle = 'anon',
+  isPersonalBest = false,
+  landmarkTimeline = null,
+  earnedKeys = [],
+  mirror = false,
+  onProgress,
+}) {
   await preloadFonts();
 
   const srcUrl = URL.createObjectURL(srcBlob);
@@ -151,6 +187,24 @@ export async function generateShareClip({ srcBlob, durationMs, handle = 'anon', 
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, W, H);
 
+    // -- 2b. Pose skeleton (dashed green joints) -------------------------
+    // Note: the recorded blob is the raw MediaStream — never mirrored — so the
+    // skeleton matches the drawn frames regardless of the live view's selfie
+    // flip. `mirror` is kept as an option for future (mirrored-export) use.
+    if (landmarkTimeline) {
+      const lm = findNearest(landmarkTimeline, elapsedMs);
+      if (lm) {
+        drawPoseSkeletonCanvas(ctx, lm, {
+          W, H,
+          srcW: video.videoWidth,
+          srcH: video.videoHeight,
+          sx, sy, sw, sh,
+          mirror: false,
+          color: GREEN,
+        });
+      }
+    }
+
     // -- 3. Fire wire-banner on each crossed 3s tick ----------------------
     if (crossedTick(lastElapsed, elapsedMs)) {
       const m = masteryFor(elapsedMs);
@@ -206,6 +260,9 @@ export async function generateShareClip({ srcBlob, durationMs, handle = 'anon', 
       ctx.restore();
     }
 
+    // -- 11b. Achievement badges (right-edge stack, pop-in on unlock) ---
+    drawBadgeStack(ctx, earnedKeys, elapsedMs);
+
     // -- 12. Handle + watermark (bottom) --------------------------------
     ctx.save();
     ctx.font = '700 38px Inter, sans-serif';
@@ -214,7 +271,7 @@ export async function generateShareClip({ srcBlob, durationMs, handle = 'anon', 
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
     ctx.shadowBlur = 14;
-    ctx.fillText(`${handle} · handstand.app`, W / 2, H - 95);
+    ctx.fillText(`${handle} · playstando.com`, W / 2, H - 95);
     ctx.restore();
   };
 
@@ -453,6 +510,75 @@ function pickMime() {
     if (MediaRecorder.isTypeSupported(m)) return m;
   }
   return null;
+}
+
+function drawBadgeStack(ctx, earnedKeys, elapsedMs) {
+  if (!earnedKeys || earnedKeys.length === 0) return;
+  // Cap to 4 visible — any more overflows the right-side gutter between the
+  // rank pill and the bottom watermark.
+  const keys = earnedKeys.slice(0, 4);
+  const r = 72;                    // 144px diameter — big enough to read on mobile feeds
+  const gap = 30;
+  const cx = W - r - 48;           // right-aligned, 48px inset from the frame
+  const topY = 780;                // clears the rank pill (bottom ~644) with breathing room
+  // Render from bottom-up so newest-unlocked stacks at top.
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const a = findAchievement(key);
+    if (!a) continue;
+    const unlockAt = BADGE_UNLOCK_MS[key] ?? 0;
+    if (elapsedMs < unlockAt) continue; // hidden until first unlocked
+    const age = elapsedMs - unlockAt;
+    // 600ms pop-in: scale 1.6 -> 1.0, angle wobble.
+    const t = Math.min(1, age / 600);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const scale = 1.6 - 0.6 * ease;
+    const rot = (1 - ease) * 0.25;
+    const cy = topY + i * (r * 2 + gap);
+    drawBadge(ctx, {
+      cx, cy, r,
+      tier: a.tier || 'bronze',
+      emoji: a.icon || '🏆',
+      scale,
+      rot,
+    });
+  }
+}
+
+function drawBadge(ctx, { cx, cy, r, tier, emoji, scale = 1, rot = 0 }) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  ctx.scale(scale, scale);
+
+  const [a, b] = TIER_GRAD[tier] || TIER_GRAD.bronze;
+
+  // Outer tier-gradient ring with soft glow.
+  const g = ctx.createLinearGradient(-r, -r, r, r);
+  g.addColorStop(0, a);
+  g.addColorStop(1, b);
+  ctx.fillStyle = g;
+  ctx.shadowColor = a;
+  ctx.shadowBlur = 30;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Inner dark disc.
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#0a0a0b';
+  ctx.beginPath();
+  ctx.arc(0, 0, r - 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Emoji glyph centered.
+  ctx.font = `700 ${Math.round(r * 1.1)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(emoji, 0, r * 0.08);
+
+  ctx.restore();
 }
 
 function hexToRgba(hex, alpha) {

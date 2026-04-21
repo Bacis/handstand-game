@@ -66,7 +66,17 @@ export function useHandstand({ onEnterTracking, onExitTracking } = {}) {
     setLatest({ landmarks: null, classification: null });
   }, []);
 
+  // Manual TRACKING → COMPLETE transition. Used by the "End attempt" button
+  // when the classifier fails to notice the drop (e.g. landmark flicker
+  // keeps the debouncer alive past the user actually being on their feet).
+  const forceComplete = useCallback(() => {
+    if (stateRef.current !== STATE.TRACKING) return;
+    debouncer.current.reset();
+    setState(STATE.COMPLETE);
+    onExitTracking?.();
+  }, [onExitTracking]);
+
   const markSubmitted = useCallback(() => setState(STATE.SUBMITTED), []);
 
-  return { state, latest, handleFrame, reset, markSubmitted };
+  return { state, latest, handleFrame, reset, forceComplete, markSubmitted };
 }
