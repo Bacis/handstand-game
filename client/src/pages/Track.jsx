@@ -391,7 +391,7 @@ export default function Track() {
         actions={actions}
         mirror={source === 'webcam' && facingMode === 'user'}
         facingMode={facingMode}
-        onFlipCamera={source === 'webcam' ? flipCamera : null}
+        onFlipCamera={source === 'webcam' && state !== STATE.TRACKING ? flipCamera : null}
         onEndAttempt={state === STATE.TRACKING ? forceComplete : null}
       />
 

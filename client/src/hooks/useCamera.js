@@ -37,10 +37,26 @@ export function useCamera(videoRef, { enabled = true, width = DEFAULT_WIDTH, hei
 
     async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: width }, height: { ideal: height }, facingMode },
-          audio: false,
-        });
+        // `facingMode: { exact }` forces the browser to actually switch
+        // cameras when the user flips. With a bare string or `{ ideal }`,
+        // mobile Chrome / iOS Safari often just hand back the existing
+        // stream (same camera) since it already satisfies the preference.
+        // Fall back to `{ ideal }` if the device doesn't expose the exact
+        // camera the user asked for — better to get *some* stream than
+        // fail outright.
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: width }, height: { ideal: height }, facingMode: { exact: facingMode } },
+            audio: false,
+          });
+        } catch (exactErr) {
+          if (exactErr?.name !== 'OverconstrainedError' && exactErr?.name !== 'NotFoundError') throw exactErr;
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: width }, height: { ideal: height }, facingMode: { ideal: facingMode } },
+            audio: false,
+          });
+        }
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
