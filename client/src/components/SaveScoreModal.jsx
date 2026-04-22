@@ -67,7 +67,7 @@ export default function SaveScoreModal({ open, challenge, score, durationMs, onS
         </div>
 
         <div className="p-5">
-          {user ? (
+          {user && !user.isAnonymous ? (
             <>
               <p className={`${LABEL} text-center mb-4 normal-case tracking-[0.12em]`}>
                 Saving as{' '}

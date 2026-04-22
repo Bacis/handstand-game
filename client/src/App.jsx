@@ -7,6 +7,9 @@ import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import Profile from './pages/Profile.jsx';
 import SkeletonLab from './pages/SkeletonLab.jsx';
 import BadgeLab from './pages/BadgeLab.jsx';
+import DuelCreate from './pages/DuelCreate.jsx';
+import DuelRoom from './pages/DuelRoom.jsx';
+import Lobby from './pages/Lobby.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import { AuthProvider, useAuth } from './lib/auth.jsx';
 
@@ -15,6 +18,10 @@ function NavBar() {
   const { pathname } = useLocation();
   const [signInOpen, setSignInOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Anonymous sessions exist so duels have a uid to attach to, but they should
+  // still see "Sign in" in the nav — they have no username to display.
+  const signedIn = Boolean(user && !user.isAnonymous);
 
   useEffect(() => { setMenuOpen(false); }, [pathname]);
 
@@ -42,6 +49,8 @@ function NavBar() {
 
         <nav className="hidden md:flex gap-[22px]">
           {navLink('/play', 'Play')}
+          {navLink('/duel/new', 'Duel')}
+          {navLink('/lobby', 'Lobby')}
           {navLink('/leaderboard', 'Leaderboard')}
           <a
             href="/#ranks"
@@ -62,7 +71,7 @@ function NavBar() {
             <span className="w-2 h-2 rounded-full bg-brand-accent motion-safe:animate-[pulseOp_1.2s_ease-in-out_infinite]" />
             14 holding now
           </span>
-          {user ? (
+          {signedIn ? (
             <>
               <Link
                 to={`/profile/${user.id}`}
@@ -118,6 +127,8 @@ function NavBar() {
       {menuOpen && (
         <nav className="md:hidden border-t border-white/5 bg-ink-900/98 backdrop-blur flex flex-col">
           {navLink('/play', 'Play', 'px-5 py-4 border-b border-white/5')}
+          {navLink('/duel/new', 'Duel', 'px-5 py-4 border-b border-white/5')}
+          {navLink('/lobby', 'Lobby', 'px-5 py-4 border-b border-white/5')}
           {navLink('/leaderboard', 'Leaderboard', 'px-5 py-4 border-b border-white/5')}
           <a
             href="/#ranks"
@@ -133,7 +144,7 @@ function NavBar() {
           >
             How
           </a>
-          {user && (
+          {signedIn && (
             <>
               <Link
                 to={`/profile/${user.id}`}
@@ -182,6 +193,9 @@ export default function App() {
             <Route path="/track" element={<Navigate to="/play" replace />} />
             <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/leaderboard/:challenge" element={<LeaderboardPage />} />
+            <Route path="/duel/new" element={<DuelCreate />} />
+            <Route path="/duel/:id" element={<DuelRoom />} />
+            <Route path="/lobby" element={<Lobby />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/skeleton-lab" element={<SkeletonLab />} />
             <Route path="/badges" element={<BadgeLab />} />

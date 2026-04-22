@@ -209,6 +209,15 @@ export function playTickSound() {
 
 export function tickReset() { tickStep = 0; }
 
+// Opponent-joined ping — friendly two-note ascending chime, Hangouts-style.
+// Short and unobtrusive so it doesn't compete with the countdown tone.
+export function playOpponentJoinedSound() {
+  unlockAudio();
+  bell({ freq: N.G5, start: 0, duration: 0.8, gain: 0.18 });
+  bell({ freq: N.C6, start: 0.14, duration: 0.9, gain: 0.20 });
+  bell({ freq: N.E6, start: 0.28, duration: 0.9, gain: 0.14 }); // sparkle
+}
+
 // Personal best: cinematic riser → impact → bright bell cluster → sustained
 // pad chord → reverb tail. ~2.5s total event.
 export function playPersonalBestSound() {

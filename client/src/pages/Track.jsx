@@ -378,9 +378,9 @@ function TrackInner({ challenge }) {
           type="button"
           className="ts-btn ghost"
           disabled={submitting || sessionBest.score <= 0}
-          onClick={() => (user ? submit() : setShowSaveModal(true))}
+          onClick={() => (user && !user.isAnonymous ? submit() : setShowSaveModal(true))}
         >
-          {submitting ? 'Saving…' : (user ? 'Submit' : 'Submit · register')}
+          {submitting ? 'Saving…' : (user && !user.isAnonymous ? 'Submit' : 'Submit · register')}
         </button>
       )}
     </>

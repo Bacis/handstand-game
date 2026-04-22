@@ -16,7 +16,7 @@ export default function MyProgressStrip() {
     setUnlockedCount(Object.keys(getState().unlocked).length);
   }, []);
 
-  if (!user) return null;
+  if (!user || user.isAnonymous) return null;
 
   const current = masteryFor(pb);
   const currentIdx = current ? MASTERIES.findIndex((m) => m.name === current.name) : -1;

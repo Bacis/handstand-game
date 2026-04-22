@@ -29,8 +29,12 @@ async function getLandmarker() {
  * Calls `onFrame({ landmarks, worldLandmarks, timestamp })` per RAF tick once
  * the video is ready. Uses requestAnimationFrame so detection naturally caps
  * around the display refresh rate (which Three.js will share).
+ *
+ * `frameStride` controls how many RAF ticks go by between detections (1 =
+ * every frame, 2 = ~30 fps → ~15 fps). Duel mode uses 2 so we can spend
+ * compute on the WebRTC encoder and the opponent's remote decode instead.
  */
-export function usePose(videoRef, ready, onFrame) {
+export function usePose(videoRef, ready, onFrame, { frameStride = 1 } = {}) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(null);
   const onFrameRef = useRef(onFrame);
@@ -42,6 +46,7 @@ export function usePose(videoRef, ready, onFrame) {
     let cancelled = false;
     let lastTs = -1;
     let landmarker = null;
+    let tickCount = 0;
 
     (async () => {
       try {
@@ -50,8 +55,10 @@ export function usePose(videoRef, ready, onFrame) {
         setLoaded(true);
         const tick = () => {
           if (cancelled) return;
+          tickCount += 1;
+          const shouldDetect = frameStride <= 1 || (tickCount % frameStride === 0);
           const video = videoRef.current;
-          if (video && video.readyState >= 2 && video.currentTime !== lastTs) {
+          if (shouldDetect && video && video.readyState >= 2 && video.currentTime !== lastTs) {
             lastTs = video.currentTime;
             const ts = performance.now();
             try {
@@ -79,7 +86,7 @@ export function usePose(videoRef, ready, onFrame) {
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [videoRef, ready]);
+  }, [videoRef, ready, frameStride]);
 
   return { loaded, error };
 }

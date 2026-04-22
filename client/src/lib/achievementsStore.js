@@ -26,6 +26,11 @@ const EMPTY = () => ({
     day_keys: [],      // YYYY-MM-DD local strings, de-duped
     shared_count: 0,
     shorts_since_last_pb: 0,
+    duels_played: 0,
+    duels_won: 0,
+    current_win_streak: 0,
+    best_win_streak: 0,
+    david_goliaths: 0,  // times an anon player beat a registered opponent
   },
 });
 
@@ -130,6 +135,41 @@ export function recordEvent(name) {
     now: new Date(),
     counters: state.counters,
     eventKeys: new Set([name]),
+  };
+  const newly = runChecks(state, ctx);
+  write(state);
+  return newly;
+}
+
+/**
+ * Call on duel completion. Runs duel-specific checks (event 'duel_complete')
+ * and updates win/streak counters. `tie` bypasses both win and loss accounting.
+ */
+export function recordDuel({ won = false, tie = false, challengeType = 'handstand', opponentIsRegistered = false, amIAnonymous = false } = {}) {
+  const state = read();
+  state.counters.duels_played += 1;
+  if (won && !tie) {
+    state.counters.duels_won += 1;
+    state.counters.current_win_streak += 1;
+    if (state.counters.current_win_streak > state.counters.best_win_streak) {
+      state.counters.best_win_streak = state.counters.current_win_streak;
+    }
+    if (amIAnonymous && opponentIsRegistered) {
+      state.counters.david_goliaths += 1;
+    }
+  } else if (!tie) {
+    state.counters.current_win_streak = 0;
+  }
+  const ctx = {
+    durationMs: 0,
+    prevPb: 0,
+    isNewPb: false,
+    now: new Date(),
+    counters: state.counters,
+    eventKeys: new Set(['duel_complete']),
+    duelWon: won && !tie,
+    duelTie: tie,
+    challengeType,
   };
   const newly = runChecks(state, ctx);
   write(state);
