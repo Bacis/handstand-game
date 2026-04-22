@@ -26,13 +26,22 @@ export default function DuelPaneRemote({
       ? String(Math.floor(score ?? 0))
       : formatTime(score ?? 0);
 
-  const showWaiting = !fallback && connectionState !== 'connected' && connectionState !== 'completed';
+  const hasStream = Boolean(remoteStream);
+  // Show the score-only card only if we've given up on video AND nothing
+  // has arrived yet. A late-arriving stream lights the <video> up and the
+  // card melts away.
+  const scoreOnly = fallback && !hasStream;
+  // "Connecting…" while we're still waiting on ICE but haven't timed out.
+  const showWaiting = !scoreOnly && !hasStream && connectionState !== 'connected' && connectionState !== 'completed';
 
   return (
     <div className="relative flex-1 min-h-0 bg-black overflow-hidden border-l border-white/10">
-      {!fallback && <video ref={videoRef} className="w-full h-full object-cover" playsInline autoPlay />}
+      {/* Video element is always mounted — if a stream shows up late (slow
+          ICE, brief network blip), the useEffect above attaches it and it
+          just starts playing. */}
+      <video ref={videoRef} className="w-full h-full object-cover" playsInline autoPlay />
 
-      {fallback && (
+      {scoreOnly && (
         <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-ink-900 to-black text-center p-6">
           <div>
             <div className="font-mono uppercase tracking-[0.2em] text-[11px] text-brand-accent mb-3">
@@ -52,7 +61,7 @@ export default function DuelPaneRemote({
         <div className="absolute top-3 left-3 font-mono uppercase tracking-[0.2em] text-[10px] text-white/80 bg-black/50 px-2 py-1 rounded-sm">
           {label}
         </div>
-        {!fallback && (
+        {!scoreOnly && (
           <div className="absolute bottom-4 left-4 font-sans font-black tabular-nums text-4xl md:text-6xl text-white/85">
             {display}
           </div>

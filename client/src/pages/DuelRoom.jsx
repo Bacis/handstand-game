@@ -297,6 +297,14 @@ function DuelRoomActive({ match: initialMatch, isHost, isGuest: initialIsGuest, 
     };
   }, [channel, camera.stream, isHost]);
 
+  // Recover from a premature fallback: if the connection eventually reaches
+  // 'connected', lift the score-only mode so the remote video shows up.
+  useEffect(() => {
+    if (rtcState === 'connected' || rtcState === 'completed') {
+      setFallback(false);
+    }
+  }, [rtcState]);
+
   // Broadcast my score at ~5Hz while the match is live (or still running
   // down before 'live' in case of any overshoot, harmless).
   const sendScore = useMemo(() => {

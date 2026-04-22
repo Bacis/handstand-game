@@ -1,5 +1,43 @@
 import { supabase } from './supabase.js';
 
+// ICE servers: STUN is enough for ~90% of peers, but TURN is needed when
+// both sides are behind symmetric NAT / restrictive firewalls (some mobile
+// carriers, corporate Wi-Fi). We read credentials from env vars so each
+// deployment can plug in its own TURN provider (Twilio, Metered paid, a
+// self-hosted coturn, etc). Absent config, we fall back to Open Relay —
+// Metered's free public TURN — which works but is rate-limited and not
+// suitable for heavy production use.
+function buildIceServers() {
+  const servers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUser = import.meta.env.VITE_TURN_USERNAME;
+  const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
+  if (turnUrl && turnUser && turnCred) {
+    servers.push({
+      urls: turnUrl.split(',').map((s) => s.trim()).filter(Boolean),
+      username: turnUser,
+      credential: turnCred,
+    });
+    return servers;
+  }
+
+  // Open Relay public TURN (free, rate-limited; swap in your own for prod).
+  servers.push({
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  });
+  return servers;
+}
+
 // One Realtime channel per match carries three ephemeral streams multiplexed
 // by broadcast `event`:
 //   - 'signal' → WebRTC SDP/ICE (consumed by connectPeer)
@@ -86,13 +124,10 @@ export function connectPeer({
   onRemoteStream,
   onConnectionStateChange,
   onFallback,
-  fallbackMs = 8000,
+  fallbackMs = 15000,
 }) {
   const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ],
+    iceServers: buildIceServers(),
   });
 
   const remoteStream = new MediaStream();
