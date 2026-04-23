@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CHALLENGES } from '../lib/challenges/index.js';
 import { duelsApi } from '../lib/duelsApi.js';
 import { useAuth } from '../lib/auth.jsx';
+import CameraCheck from '../components/duel/CameraCheck.jsx';
 
 const DURATIONS = [
   { value: 30, label: '30 s', blurb: 'Quick burst' },
@@ -18,6 +19,8 @@ export default function DuelCreate() {
   const [durationS, setDurationS] = useState(60);
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState(null);
+  const [camStatus, setCamStatus] = useState({ cameraReady: false, poseReady: false, error: null });
+  const canCreate = camStatus.cameraReady && camStatus.poseReady && !camStatus.error;
 
   const challenge = useMemo(() => CHALLENGES.find((c) => c.id === challengeId), [challengeId]);
 
@@ -59,6 +62,17 @@ export default function DuelCreate() {
       </header>
 
       <div className="space-y-8">
+        <section>
+          <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-white/55 mb-3">
+            Camera check
+          </div>
+          <p className="text-white/60 text-sm mb-3">
+            This is a webcam challenge \u2014 we track your reps by watching your body. Uncover your
+            camera and step fully into frame before you create the duel.
+          </p>
+          <CameraCheck onStatusChange={setCamStatus} />
+        </section>
+
         <section>
           <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-white/55 mb-3">
             Challenge
@@ -117,11 +131,15 @@ export default function DuelCreate() {
 
         <button
           type="button"
-          disabled={creating}
+          disabled={creating || !canCreate}
           onClick={create}
-          className="w-full py-4 bg-brand-accent text-black font-mono uppercase tracking-[0.18em] text-sm font-bold rounded-sm disabled:opacity-45 hover:-translate-y-px transition"
+          className="w-full py-4 bg-brand-accent text-black font-mono uppercase tracking-[0.18em] text-sm font-bold rounded-sm disabled:opacity-30 disabled:cursor-not-allowed hover:-translate-y-px transition"
         >
-          {creating ? 'Creating…' : `Create duel · ${challenge?.label} · ${durationS}s`}
+          {creating
+            ? 'Creating\u2026'
+            : !canCreate
+            ? (camStatus.error ? 'Fix camera to continue' : 'Waiting for camera\u2026')
+            : `Create duel \u00b7 ${challenge?.label} \u00b7 ${durationS}s`}
         </button>
       </div>
     </div>

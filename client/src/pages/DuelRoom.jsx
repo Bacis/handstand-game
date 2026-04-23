@@ -252,6 +252,19 @@ function DuelRoomActive({ match: initialMatch, isHost, isGuest: initialIsGuest, 
     return () => clearTimeout(t);
   }, [state]);
 
+  // Escalate the "Step into frame" hint to "Is your camera covered?" when
+  // we've been waiting for a local pose for a while with the camera clearly
+  // running. Triggers at 8 s — gives people time to naturally walk in.
+  const [poseWaitEscalated, setPoseWaitEscalated] = useState(false);
+  useEffect(() => {
+    if (localPoseReady || !camera.ready || !poseLoaded) {
+      setPoseWaitEscalated(false);
+      return;
+    }
+    const t = setTimeout(() => setPoseWaitEscalated(true), 8000);
+    return () => clearTimeout(t);
+  }, [localPoseReady, camera.ready, poseLoaded]);
+
   useEffect(() => {
     if (!channel) return;
     channel.sendState({ kind: 'pose-ready', value: localPoseReady });
@@ -517,9 +530,10 @@ function DuelRoomActive({ match: initialMatch, isHost, isGuest: initialIsGuest, 
           videoAspect={videoAspect}
           score={myScore}
           mirror={mirror}
-          label={`You · ${names[isHost ? 'host' : 'guest'] || (user.isAnonymous ? 'guest' : 'you')}`}
+          label={`You \u00b7 ${names[isHost ? 'host' : 'guest'] || (user.isAnonymous ? 'guest' : 'you')}`}
           ready={camera.ready && poseLoaded}
           active={state === STATE.TRACKING}
+          cameraError={camera.error}
         />
         {isHost && !match.guest_id ? (
           <DuelInvitePanel match={match} challenge={challenge} />
@@ -541,10 +555,20 @@ function DuelRoomActive({ match: initialMatch, isHost, isGuest: initialIsGuest, 
       />
 
       {match.state === 'ready' && match.guest_id && !joinBannerVisible && countdownSeconds == null && (!localPoseReady || !opponentPoseReady) && (
-        <div className="absolute inset-x-0 top-16 z-30 pointer-events-none flex justify-center">
-          <div className="bg-black/70 backdrop-blur border border-white/15 text-white/90 font-mono uppercase tracking-[0.18em] text-[11px] font-bold px-4 py-2.5 rounded-sm flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-accent motion-safe:animate-[pulseOp_1.2s_ease-in-out_infinite]" />
-            {!localPoseReady ? 'Step into frame' : 'Waiting for opponent to step in…'}
+        <div className="absolute inset-x-0 top-16 z-30 pointer-events-none flex justify-center px-4">
+          <div className={`backdrop-blur border font-mono uppercase tracking-[0.18em] text-[11px] font-bold px-4 py-2.5 rounded-sm flex items-center gap-2 max-w-md text-center ${
+            !localPoseReady && poseWaitEscalated
+              ? 'bg-amber-500/20 border-amber-400/60 text-amber-100'
+              : 'bg-black/70 border-white/15 text-white/90'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full motion-safe:animate-[pulseOp_1.2s_ease-in-out_infinite] ${
+              !localPoseReady && poseWaitEscalated ? 'bg-amber-300' : 'bg-brand-accent'
+            }`} />
+            {!localPoseReady
+              ? (poseWaitEscalated
+                  ? 'We can\u2019t see you \u2014 is your camera covered? Step fully into frame.'
+                  : 'Step into frame')
+              : 'Waiting for opponent to step in\u2026'}
           </div>
         </div>
       )}

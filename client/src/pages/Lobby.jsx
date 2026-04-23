@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../lib/auth.jsx';
 import { duelsApi } from '../lib/duelsApi.js';
 import { CHALLENGES } from '../lib/challenges/index.js';
+import CameraCheck from '../components/duel/CameraCheck.jsx';
 
 const DURATIONS = [
   { value: 30, label: '30 s' },
@@ -20,6 +21,8 @@ export default function Lobby() {
   const [seeking, setSeeking] = useState(false);
   const [status, setStatus] = useState('');
   const [peerCount, setPeerCount] = useState(0);
+  const [camStatus, setCamStatus] = useState({ cameraReady: false, poseReady: false, error: null });
+  const canQueue = camStatus.cameraReady && camStatus.poseReady && !camStatus.error;
 
   const claimInFlightRef = useRef(false);
   const redirectingRef = useRef(false);
@@ -136,6 +139,17 @@ export default function Lobby() {
         <div className="space-y-6">
           <section>
             <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-white/55 mb-3">
+              Camera check
+            </div>
+            <p className="text-white/60 text-sm mb-3">
+              This is a webcam challenge. Make sure your camera is on and we can see your full body
+              before we pair you with an opponent.
+            </p>
+            <CameraCheck onStatusChange={setCamStatus} />
+          </section>
+
+          <section>
+            <div className="font-mono uppercase tracking-[0.2em] text-[10px] text-white/55 mb-3">
               Challenge
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -186,9 +200,12 @@ export default function Lobby() {
           <button
             type="button"
             onClick={start}
-            className="w-full py-4 bg-brand-accent text-black font-mono uppercase tracking-[0.18em] text-sm font-bold rounded-sm hover:-translate-y-px transition"
+            disabled={!canQueue}
+            className="w-full py-4 bg-brand-accent text-black font-mono uppercase tracking-[0.18em] text-sm font-bold rounded-sm disabled:opacity-30 disabled:cursor-not-allowed hover:-translate-y-px transition"
           >
-            Find opponent
+            {canQueue
+              ? 'Find opponent'
+              : camStatus.error ? 'Fix camera to continue' : 'Waiting for camera\u2026'}
           </button>
           {status && (
             <div className="text-[12px] text-[#ff6d5c] font-mono uppercase tracking-[0.12em]">
