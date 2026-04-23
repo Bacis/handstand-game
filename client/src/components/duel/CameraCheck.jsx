@@ -53,15 +53,18 @@ export default function CameraCheck({ onStatusChange, className = '' }) {
 
   // Debounce landmarks → poseReady. Enter after 800 ms of continuous
   // detection; drop after 400 ms of nothing (MediaPipe blips shouldn't
-  // revoke readiness).
+  // revoke readiness). IMPORTANT: depend on the boolean, not the landmarks
+  // object — the object is a new reference every RAF tick, which would
+  // reset the timer ~15 times per second and keep poseReady forever false.
+  const hasLandmarks = Boolean(landmarks);
   useEffect(() => {
-    if (landmarks) {
+    if (hasLandmarks) {
       const t = setTimeout(() => setPoseReady(true), 800);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => setPoseReady(false), 400);
     return () => clearTimeout(t);
-  }, [landmarks]);
+  }, [hasLandmarks]);
 
   // Timer since camera came up without pose — drives the escalating hint.
   useEffect(() => {
