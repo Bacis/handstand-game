@@ -40,21 +40,24 @@ export const duelsApi = {
     return data;
   },
 
-  // Guest attaches themselves to a pending match. Only succeeds if guest_id
-  // is still null (CAS via filter — two clients racing to join the same
-  // invite link can't both succeed).
+  // Guest attaches themselves to an invite. Allowed whenever the match is
+  // still pre-live (state in pending/ready) — we intentionally *don't*
+  // require guest_id to be null, so a friend whose browser-preview or
+  // in-app-browser "pre-joined" the link can still claim the slot when
+  // they open it properly. Once state flips to 'live' the RLS policy
+  // locks the slot and this update is rejected.
   join: async (matchId) => {
     const user = await requireUser();
     const { data, error } = await supabase
       .from('matches')
       .update({ guest_id: user.id, state: 'ready' })
       .eq('id', matchId)
-      .is('guest_id', null)
       .neq('host_id', user.id)
+      .in('state', ['pending', 'ready'])
       .select(MATCH_COLS)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!data) throw new Error('This match is already full or no longer accepting players.');
+    if (!data) throw new Error('This duel has already started or is no longer accepting players.');
     return data;
   },
 

@@ -87,7 +87,9 @@ export default function DuelRoom() {
   // out of scope.
   const isHost = user.id === match.host_id;
   const isGuest = user.id === match.guest_id;
-  const mayJoinAsGuest = !isHost && !isGuest && match.guest_id == null && match.state !== 'done' && match.state !== 'cancelled';
+  // Any non-host can claim/bump the guest slot while the match is pre-live —
+  // this rescues the "link-preview consumed the slot" case.
+  const mayJoinAsGuest = !isHost && !isGuest && (match.state === 'pending' || match.state === 'ready');
 
   if (!isHost && !isGuest && !mayJoinAsGuest) {
     return (
@@ -102,14 +104,17 @@ export default function DuelRoom() {
     );
   }
 
-  return <DuelRoomActive match={match} isHost={isHost} isGuest={isGuest} mayJoinAsGuest={mayJoinAsGuest} user={user} />;
+  return <DuelRoomActive match={match} isHost={isHost} mayJoinAsGuest={mayJoinAsGuest} user={user} />;
 }
 
-function DuelRoomActive({ match: initialMatch, isHost, isGuest: initialIsGuest, mayJoinAsGuest, user }) {
+function DuelRoomActive({ match: initialMatch, isHost, mayJoinAsGuest, user }) {
   const navigate = useNavigate();
   const [match, setMatch] = useState(initialMatch);
-  const [isGuest, setIsGuest] = useState(initialIsGuest);
   useEffect(() => setMatch(initialMatch), [initialMatch]);
+  // Derived so it always reflects the live match row — if someone bumps me
+  // out of the guest slot mid-setup, isGuest flips back to false on the
+  // next realtime update.
+  const isGuest = user.id === match.guest_id;
 
   const challenge = useMemo(
     () => challengeOrDefault(match.challenge_type),
@@ -123,7 +128,7 @@ function DuelRoomActive({ match: initialMatch, isHost, isGuest: initialIsGuest, 
     if (!mayJoinAsGuest || joinAttemptedRef.current) return;
     joinAttemptedRef.current = true;
     duelsApi.join(match.id)
-      .then((updated) => { setMatch(updated); setIsGuest(true); })
+      .then((updated) => setMatch(updated))
       .catch((e) => console.error('[duel] join failed:', e));
   }, [mayJoinAsGuest, match.id]);
 
