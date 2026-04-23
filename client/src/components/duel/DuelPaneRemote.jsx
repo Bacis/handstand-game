@@ -42,10 +42,13 @@ export default function DuelPaneRemote({
       : formatTime(score ?? 0);
 
   const hasStream = Boolean(remoteStream);
+  // Hard failure: ICE gave up. Distinct from the 15 s "slow to connect"
+  // fallback; usually indicates a VPN/firewall blocking STUN+TURN entirely.
+  const failed = connectionState === 'failed' || connectionState === 'closed';
   // Show the score-only card only if we've given up on video AND nothing
   // has arrived yet. A late-arriving stream lights the <video> up and the
   // card melts away.
-  const scoreOnly = fallback && !hasStream;
+  const scoreOnly = (fallback || failed) && !hasStream;
   // "Connecting…" while we're still waiting on ICE but haven't timed out.
   const showWaiting = !scoreOnly && !hasStream && connectionState !== 'connected' && connectionState !== 'completed';
 
@@ -60,13 +63,15 @@ export default function DuelPaneRemote({
         <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-ink-900 to-black text-center p-6">
           <div>
             <div className="font-mono uppercase tracking-[0.2em] text-[11px] text-brand-accent mb-3">
-              · Score-only mode
+              · {failed ? 'Video blocked' : 'Score-only mode'}
             </div>
             <div className="font-sans font-black tabular-nums text-6xl md:text-7xl text-white/90 drop-shadow-[0_0_16px_#ff4d2e]">
               {display}
             </div>
             <p className="text-white/55 text-xs mt-3 max-w-xs font-sans">
-              Opponent video unavailable — their score is still syncing live.
+              {failed
+                ? 'Your network couldn\u2019t reach the video servers \u2014 usually a VPN or corporate firewall. Score is still syncing live.'
+                : 'Opponent video unavailable \u2014 their score is still syncing live.'}
             </p>
           </div>
         </div>
