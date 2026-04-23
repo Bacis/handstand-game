@@ -13,11 +13,20 @@ const REQUIRED = [
   LANDMARK.LEFT_ELBOW, LANDMARK.RIGHT_ELBOW,
   LANDMARK.LEFT_WRIST, LANDMARK.RIGHT_WRIST,
   LANDMARK.LEFT_HIP, LANDMARK.RIGHT_HIP,
+  LANDMARK.LEFT_ANKLE, LANDMARK.RIGHT_ANKLE,
 ];
 
 const UP_THRESHOLD = 150;    // elbow angle >= this → fully extended
 const DOWN_THRESHOLD = 100;  // elbow angle <= this → bottom of rep
 const HORIZONTAL_DELTA = 0.22; // max abs(shoulder.y - hip.y) to call it "plank-ish"
+// Hands on floor: shoulders propped above wrists by this fraction of screen height.
+// Rejects supine "arms pumping in the air" — there, wrists sit above shoulders.
+const SHOULDER_ABOVE_WRIST_MIN = 0.05;
+// Feet on floor: ankle.y ≥ hip.y − this. Feet can be slightly above hips (decline)
+// but not meaningfully above. Rejects feet-in-air cheats.
+const ANKLE_AT_OR_BELOW_HIP = -0.03;
+// Hands and feet share a floor plane. Generous to tolerate 3/4 view and inclines.
+const FLOOR_PLANE_DELTA = 0.28;
 
 function createPushupsDetector() {
   let phase = 'up'; // 'up' | 'down'
@@ -28,18 +37,28 @@ function createPushupsDetector() {
       }
       const shoulder = avg(landmarks[LANDMARK.LEFT_SHOULDER], landmarks[LANDMARK.RIGHT_SHOULDER]);
       const hip = avg(landmarks[LANDMARK.LEFT_HIP], landmarks[LANDMARK.RIGHT_HIP]);
+      const wrist = avg(landmarks[LANDMARK.LEFT_WRIST], landmarks[LANDMARK.RIGHT_WRIST]);
+      const ankle = avg(landmarks[LANDMARK.LEFT_ANKLE], landmarks[LANDMARK.RIGHT_ANKLE]);
 
       const horizontalish = Math.abs(shoulder.y - hip.y) < HORIZONTAL_DELTA;
       const notInverted = shoulder.y < 0.92 && hip.y < 0.92;
+      const handsOnFloor = (wrist.y - shoulder.y) >= SHOULDER_ABOVE_WRIST_MIN;
+      const feetOnFloor = (ankle.y - hip.y) >= ANKLE_AT_OR_BELOW_HIP;
+      const sameFloorPlane = Math.abs(wrist.y - ankle.y) <= FLOOR_PLANE_DELTA;
       const vis = visAvg(
         landmarks[LANDMARK.LEFT_SHOULDER], landmarks[LANDMARK.RIGHT_SHOULDER],
         landmarks[LANDMARK.LEFT_ELBOW], landmarks[LANDMARK.RIGHT_ELBOW],
         landmarks[LANDMARK.LEFT_WRIST], landmarks[LANDMARK.RIGHT_WRIST],
+        landmarks[LANDMARK.LEFT_ANKLE], landmarks[LANDMARK.RIGHT_ANKLE],
       );
-      const active = horizontalish && notInverted && vis >= 0.55;
+      const active = horizontalish && notInverted && handsOnFloor && feetOnFloor && sameFloorPlane && vis >= 0.55;
       if (!active) {
         phase = 'up';
-        return { active: false, repIncrement: 0, debug: { reason: 'not-plank', horizontalish, vis } };
+        return {
+          active: false,
+          repIncrement: 0,
+          debug: { reason: 'not-plank', horizontalish, notInverted, handsOnFloor, feetOnFloor, sameFloorPlane, vis },
+        };
       }
 
       const leftAngle = angleDeg(
@@ -64,7 +83,7 @@ function createPushupsDetector() {
       return {
         active: true,
         repIncrement,
-        debug: { phase, elbow: Math.round(elbow), vis },
+        debug: { phase, elbow: Math.round(elbow), vis, handsOnFloor, feetOnFloor, sameFloorPlane },
       };
     },
     reset() { phase = 'up'; },
@@ -100,7 +119,7 @@ export const pushups = {
   icon: '⎯',
   accent: '#61d0c8',
   copy: {
-    statusIdle: 'Get into plank position',
+    statusIdle: 'Hands and feet on the floor, body straight',
     statusReady: 'Start pushing',
     statusTracking: 'Recording · keep going',
     statusComplete: 'Nice set — submit it?',
