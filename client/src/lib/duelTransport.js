@@ -85,16 +85,30 @@ export function createMatchChannel(matchId, { userId, meta = {} }) {
     sendState: (payload) => channel.send({ type: 'broadcast', event: 'state', payload }),
     presenceState: () => channel.presenceState(),
     subscribe: () =>
+      // Don't give up on the first TIMED_OUT / CHANNEL_ERROR — Supabase's
+      // underlying websocket reconnects automatically and `subscribe` will
+      // re-fire. We only hard-reject after a generous 30 s total budget so
+      // a flaky first handshake (common on mobile / tethering / some VPNs)
+      // doesn't kill signaling and leave the duel with stuck black video.
       new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (fn) => { if (!settled) { settled = true; fn(); } };
+        const hardTimeout = setTimeout(() => {
+          finish(() => reject(new Error('channel subscribe gave up after 30s')));
+        }, 30000);
         channel.subscribe(async (status, err) => {
           if (status === 'SUBSCRIBED') {
-            await channel.track({ userId, ...meta });
-            resolve();
+            try { await channel.track({ userId, ...meta }); } catch (e) {
+              console.warn('[duel] presence track failed:', e?.message || e);
+            }
+            clearTimeout(hardTimeout);
+            finish(() => resolve());
           } else if (status === 'CHANNEL_ERROR') {
-            reject(err ?? new Error('channel error'));
+            console.warn('[duel] channel error, awaiting retry:', err?.message || err);
           } else if (status === 'TIMED_OUT') {
-            reject(new Error('channel timeout'));
+            console.warn('[duel] channel subscribe timed out, awaiting retry');
           }
+          // CLOSED is fired on explicit teardown; ignore.
         });
       }),
     close: () => {
