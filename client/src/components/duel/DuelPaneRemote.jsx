@@ -15,8 +15,23 @@ export default function DuelPaneRemote({
     const v = videoRef.current;
     if (!v || !remoteStream) return;
     v.srcObject = remoteStream;
-    v.play().catch(() => {});
+    // Autoplay requires the element to be muted when there's any chance of
+    // audio — even though our stream is video-only, being explicit keeps
+    // Safari and stricter Chromium builds happy.
+    v.muted = true;
+    const tryPlay = () => {
+      v.play().catch((err) => {
+        console.warn('[duel] remote video play() rejected:', err?.message || err);
+      });
+    };
+    tryPlay();
+    // A late-arriving track (e.g. the video track lands a moment after the
+    // audio track, or after a renegotiation) won't re-trigger this effect
+    // because remoteStream's reference didn't change — listen explicitly.
+    const onAddTrack = () => tryPlay();
+    remoteStream.addEventListener('addtrack', onAddTrack);
     return () => {
+      remoteStream.removeEventListener('addtrack', onAddTrack);
       try { v.srcObject = null; } catch {}
     };
   }, [remoteStream]);
@@ -39,7 +54,7 @@ export default function DuelPaneRemote({
       {/* Video element is always mounted — if a stream shows up late (slow
           ICE, brief network blip), the useEffect above attaches it and it
           just starts playing. */}
-      <video ref={videoRef} className="w-full h-full object-cover" playsInline autoPlay />
+      <video ref={videoRef} className="w-full h-full object-cover" playsInline autoPlay muted />
 
       {scoreOnly && (
         <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-ink-900 to-black text-center p-6">

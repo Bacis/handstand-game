@@ -145,6 +145,19 @@ export function connectPeer({
   };
 
   pc.ontrack = (e) => {
+    // Diagnostic: log once per track so a dead/muted/ended track is obvious
+    // in the console when debugging "black video" reports.
+    console.log(
+      '[duel] ontrack',
+      e.track.kind,
+      'readyState=' + e.track.readyState,
+      'muted=' + e.track.muted,
+      'enabled=' + e.track.enabled,
+    );
+    e.track.addEventListener('unmute', () => console.log('[duel] remote', e.track.kind, 'unmuted'));
+    e.track.addEventListener('mute', () => console.log('[duel] remote', e.track.kind, 'muted (keyframe lost?)'));
+    e.track.addEventListener('ended', () => console.log('[duel] remote', e.track.kind, 'ended'));
+
     for (const track of e.streams[0].getTracks()) {
       if (!remoteStream.getTracks().includes(track)) remoteStream.addTrack(track);
     }
@@ -164,27 +177,28 @@ export function connectPeer({
     for (const track of localStream.getTracks()) pc.addTrack(track, localStream);
   }
 
-  // Cap outgoing video at ~2.5 Mbps / 30 fps. Generous enough for sharp 720p
-  // (Hangouts/Meet sit around 1.5–2 Mbps at the same resolution) while still
-  // preventing the encoder from runaway-ramping to 5–10 Mbps on a LAN peer —
-  // the runaway is what was pinning the CPU and causing the lag.
-  for (const sender of pc.getSenders()) {
-    if (sender.track?.kind !== 'video') continue;
-    const params = sender.getParameters();
-    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
-    params.encodings[0].maxBitrate = 2_500_000;
-    params.encodings[0].maxFramerate = 30;
-    sender.setParameters(params).catch((err) => {
-      console.warn('[duel] setParameters failed (non-fatal):', err);
-    });
-  }
-  // Hint the encoder we're sending a person talking / moving naturally — lets
-  // it prioritise temporal smoothness over spatial detail on busy frames.
-  for (const sender of pc.getSenders()) {
-    if (sender.track && sender.track.kind === 'video') {
+  // Cap outgoing video at 1.2 Mbps / 30 fps. Deliberately below free TURN
+  // relay throttles (Open Relay shapes aggressively above ~1.5 Mbps, which
+  // manifests as dropped packets → the remote decoder stalls waiting on a
+  // keyframe → all-black video). 1.2 Mbps at 720p still looks sharp.
+  //
+  // setParameters is deferred via microtask so it runs after the offer is
+  // created — some browsers clear our encoding changes if they fire before
+  // the transceiver has negotiated, and silently fall back to defaults.
+  const applyEncoderCaps = () => {
+    for (const sender of pc.getSenders()) {
+      if (sender.track?.kind !== 'video') continue;
       try { sender.track.contentHint = 'motion'; } catch {}
+      const params = sender.getParameters();
+      if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+      params.encodings[0].maxBitrate = 1_200_000;
+      params.encodings[0].maxFramerate = 30;
+      sender.setParameters(params).catch((err) => {
+        console.warn('[duel] setParameters failed (non-fatal):', err?.message || err);
+      });
     }
-  }
+  };
+  queueMicrotask(applyEncoderCaps);
 
   let answerReceived = false;
   let offerReceived = false;
@@ -200,6 +214,7 @@ export function connectPeer({
         await flushIce();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
+        applyEncoderCaps(); // re-apply now that encodings exist post-SLD
         channel.sendSignal({ kind: 'answer', sdp: answer.sdp });
       } else if (payload.kind === 'answer' && role === 'offerer') {
         if (answerReceived) return;
@@ -228,6 +243,7 @@ export function connectPeer({
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        applyEncoderCaps(); // re-apply now that encodings exist post-SLD
         const send = () => {
           if (answerReceived) return;
           channel.sendSignal({ kind: 'offer', sdp: offer.sdp });

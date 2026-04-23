@@ -213,6 +213,13 @@ export function tickReset() { tickStep = 0; }
 // Short and unobtrusive so it doesn't compete with the countdown tone.
 export function playOpponentJoinedSound() {
   unlockAudio();
+  // If audio hasn't actually unlocked yet (no user gesture on this page
+  // yet — e.g. the guest clicked the invite link in another app and
+  // landed here without tapping), skip. Scheduling through a suspended
+  // AudioContext just spams ~16 warnings to the console for no audible
+  // sound.
+  const c = getCtx();
+  if (!c || c.state !== 'running') return;
   bell({ freq: N.G5, start: 0, duration: 0.8, gain: 0.18 });
   bell({ freq: N.C6, start: 0.14, duration: 0.9, gain: 0.20 });
   bell({ freq: N.E6, start: 0.28, duration: 0.9, gain: 0.14 }); // sparkle
